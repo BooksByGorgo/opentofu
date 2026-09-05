@@ -47,7 +47,6 @@ the booklet is its own repo opentofu. it copies the gorgo booklet layout from cp
 - each chapter that changes the go program carries its own copy of `app/`; keep the copies identical where the chapter did not change them
 - run `tofu fmt -check -recursive` in `examples/` and `tofu validate` in every root module before calling a change done
 - test applies before quoting output: chapters 1--4 and the chapter 5 app stage (with `-var docker_host=unix:///var/run/docker.sock` and a fake infra state) run locally; chapter 5 infra can only be `tofu init` + `tofu validate` without oracle and cloudflare credentials
-- the chapter 2 `github_repository` is plan-only on this machine: the gh token lacks `delete_repo`, so a created repo could not be destroyed
 - `examples/.gitignore` ignores lock files on purpose (the examples must init on any platform); appendix A explains that real projects commit them
 - never commit state files, `.terraform/`, or a `.tfvars` with a secret; `example.tfvars` is the committed template
 
