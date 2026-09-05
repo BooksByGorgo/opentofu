@@ -20,7 +20,8 @@ the booklet is its own repo opentofu. it copies the gorgo booklet layout from cp
 - each chapter ends with, in this order: Key Points, New Syntax (a two-column table `| Syntax | What it is |`), Try It (things to change, break, and extend), Exercises
 - exercises are a mix of: think about it, what does this do (with a snippet), calculation, where is the bug (with a snippet), write a configuration
 - `tofu-answers.md` restates every exercise (including snippets) before its answer, one heading per chapter
-- `ch00.md` explains conventions and prerequisites, `conclusion.md` is the wrap-up, `appA.md` collects best practices, recommendations, and common errors and starts with `\appendix`
+- `ch00.md` explains conventions and prerequisites, `conclusion.md` is the wrap-up, `appA.md` collects best practices, recommendations, and common errors and starts with `\appendix`, `appB.md` lists the built-ins (built-in provider, block types, meta-arguments, named values, operators, commonly used functions with an example and its result)
+- every function example in appB.md must be evaluated with `tofu console` before it goes in; show the result as a plain value, truncate hashes to eight characters, and describe values that change on every run instead of quoting one
 - there is no author intro. do not write one in ben's voice; leave that to ben
 
 # format and style

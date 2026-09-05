@@ -8,7 +8,7 @@ PDFS := $(BOOK).pdf $(BOOK)-answers.pdf
 
 CHAPTERS := frontmatter.yaml \
 	ch00.md ch01.md ch02.md ch03.md ch04.md ch05.md conclusion.md \
-	appA.md \
+	appA.md appB.md \
 	bibliography.md
 
 CH_SRCS := $(filter ch%.md,$(CHAPTERS))
