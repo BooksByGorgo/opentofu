@@ -67,7 +67,7 @@ the booklet is its own repo opentofu. it copies the gorgo booklet layout from cp
 
 - `make` builds `tofu.pdf`, `tofu-answers.pdf`, and one PDF per chapter with pandoc + latexmk (lualatex); PDFs are gitignored
 - fonts: TeX Gyre Pagella and JetBrains Mono with noto fallbacks, as in ~/git/cpp
-- the title page uses `images/c++-gorgo-with-badge.png` until there is a tofu badge
+- the title page uses `images/tofu-gorgo-with-badge.png`
 
 # verify the booklet
 
