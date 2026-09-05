@@ -1,4 +1,4 @@
-# examples for Gorgo Starting OpenTofu and Terraform
+# examples for Gorgo Tasting OpenTofu and Terraform
 
 Every directory is a self-contained root module named the way the chapter names it: `cd` into it, `tofu init`, `tofu apply`.
 Replace `tofu` with `terraform` if that is what you use.

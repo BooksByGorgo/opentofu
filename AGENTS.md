@@ -1,6 +1,6 @@
 # project description
 
-a short gorgo-style booklet, "Gorgo Starting OpenTofu and Terraform", that teaches infrastructure as code by building a message-of-the-second web server: echo hello world, a go web server in docker, a mysql database of 3600 sayings, the same on kubernetes, and finally on an oracle cloud free tier VM with cloudflare DNS and a let's encrypt certificate.
+a short gorgo-style booklet, "Gorgo Tasting OpenTofu and Terraform", that teaches infrastructure as code by building a message-of-the-second web server: echo hello world, a go web server in docker, a mysql database of 3600 sayings, the same on kubernetes, and finally on an oracle cloud free tier VM with cloudflare DNS and a let's encrypt certificate.
 
 the booklet is its own repo opentofu. it copies the gorgo booklet layout from cpp but is self-contained: `callout.lua` and `images/` are local copies (paths patched from `../images` to `images`).
 

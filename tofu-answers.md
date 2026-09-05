@@ -1,5 +1,5 @@
 ---
-title: "Gorgo Starting OpenTofu and Terraform --- Exercise Answers"
+title: "Gorgo Tasting OpenTofu and Terraform --- Exercise Answers"
 header-includes:
   - \usepackage[most]{tcolorbox}
 ---
