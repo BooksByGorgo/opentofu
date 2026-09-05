@@ -351,7 +351,7 @@ The Kubernetes expansion syntax uses parentheses: `$(DB_PASSWORD)`, which the co
 
 ---
 
-**6. Write a module** named `namespace-quota` that creates a namespace and a `kubernetes_resource_quota_v1` limiting it to a number of pods given by a variable.
+**6. Write a module** around `kubernetes_resource_quota_v1`: name it `namespace-quota`, give it a namespace name and a maximum number of pods as variables, and have it create the namespace with that quota.
 Call it from the root for two namespaces and confirm `kubectl describe quota` in each.
 
 **Answer:**

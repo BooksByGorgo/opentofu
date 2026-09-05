@@ -29,6 +29,6 @@ locals {
 }
 
 provider "docker" {
-  host     = var.docker_host != null ? var.docker_host : "ssh://ubuntu@${local.infra.fqdn}"
+  host     = coalesce(var.docker_host, "ssh://ubuntu@${local.infra.fqdn}")
   ssh_opts = ["-o", "StrictHostKeyChecking=accept-new"]
 }

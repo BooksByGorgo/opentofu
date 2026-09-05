@@ -194,7 +194,7 @@ Messages are abbreviated.
 ### Providers used in this booklet
 
 | Message | Cause and fix |
-|:----------------|:------------------------|
+|:--------------------|:--------------------|
 | `Bind for 0.0.0.0:8080 failed: port is already allocated` | Another process or container owns the port; change the variable [@DockerNetwork]. |
 | `Conflict. The container name "/motd-db" is already in use` | A container the tool does not know about; remove it or import it [@DockerRun; @OTF_ImportCli]. |
 | `Cannot connect to the Docker daemon` | Docker is not running, or the socket needs your user in the `docker` group, or the `host` is wrong [@DockerPostInstall; @DockerProvider]. |

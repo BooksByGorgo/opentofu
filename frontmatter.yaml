@@ -10,6 +10,17 @@ monofont: "JetBrains Mono"
 header-includes:
   - \usepackage[most]{tcolorbox}
   - \usepackage{fancyvrb}
+  - \usepackage{accsupp}
+  - |
+    ```{=latex}
+    % typeset every space in code as a real space glyph (with ActualText) so
+    % that indentation survives copying from the PDF; plain verbatim goes
+    % through fancyvrb too so it gets the same treatment
+    \makeatletter
+    \def\FV@Space{\BeginAccSupp{method=hex,ActualText=20}\char32\EndAccSupp{}}
+    \makeatother
+    \RecustomVerbatimEnvironment{verbatim}{Verbatim}{}
+    ```
   - \usepackage{imakeidx}
   - \makeindex[intoc]
   - \setcounter{chapter}{-1}

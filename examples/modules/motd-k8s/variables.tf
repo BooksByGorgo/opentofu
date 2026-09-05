@@ -11,7 +11,7 @@ variable "image" {
 
 variable "image_pull_secret" {
   type        = string
-  description = "Name of a docker registry secret in the namespace, if the image needs one."
+  description = "Name of a registry pull secret in the namespace, if the image needs one."
   default     = null
 }
 

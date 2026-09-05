@@ -56,8 +56,10 @@ check "saying" {
   }
 
   assert {
-    condition     = can(regex("^\\[\\d\\d:\\d\\d:\\d\\d\\] .+", data.http.web.response_body))
-    error_message = "the web server did not serve a saying: ${data.http.web.response_body}"
+    condition = can(regex(
+      "^\\[\\d\\d:\\d\\d:\\d\\d\\] .+", data.http.web.response_body
+    ))
+    error_message = "not a saying: ${data.http.web.response_body}"
   }
 }
 

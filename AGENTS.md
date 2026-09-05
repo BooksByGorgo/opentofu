@@ -36,7 +36,7 @@ the booklet is its own repo opentofu. it copies the gorgo booklet layout from cp
 - a line holding only `...` inside a session stands for output that was left out (say so once in ch00); tool output is trimmed to the interesting lines; ids and timings may differ from a real run but the wording must match the current tool
 - callouts are `::: {.tip}` divs whose body starts with `**Tip:**`, `**Trap:**`, or `**Wut:**`; a blank line must precede the opening fence; put `\index{}` lines inside the callout after the fence, never on the line before it
 - `\index{term}` at the primary introduction of a term, never inside code blocks, and always followed by a blank line when the next line is a list item, a table, or a code fence (otherwise pandoc glues the list into a paragraph)
-- code-block lines at most 96 chars (80 inside callouts); verbatim lines around 95 chars still overflow the page, so keep output lines under 90
+- code-block lines at most 90 chars (80 inside callouts): with this font a 93-char line already runs into the margin, so the 96 of the c++ books does not apply here
 - avoid a long inline-code token at the end of a bullet sentence; it cannot break and produces an overfull box
 
 # examples
@@ -74,6 +74,8 @@ the booklet is its own repo opentofu. it copies the gorgo booklet layout from cp
 - mechanical (script it): no `bash` fences (sessions only); blank line before every `::: {.tip}`; every callout body starts with a label; fence opens equal fence closes; code lines within limits; no unicode dashes outside code; no `\index{}` in code blocks; blank line after `\index{}` before lists
 - build to `.tex` in a scratch dir and run latexmk there to get a log; look for `Overfull \hbox` of 10pt or more, `undefined`, and `Missing character`
 - `pdftotext tofu.pdf - | grep -E ':::|\{\.tip\}|\\index\{'` must print nothing
+- indentation must survive copying from the PDF: the front matter redefines fancyvrb's `\FV@Space` to a real space glyph with ActualText; check with `mutool draw -F txt tofu.pdf` (pdftotext trims leading spaces and cannot show this)
+- `pdftotext -bbox` word positions must stay inside 69..544pt; the LaTeX log must have no Overfull box at all (verbatim overflows produce small ones)
 - render every page with a table (`pdftoppm -r 60`) and look at it; column overlap shows up in no log
 - verify every quoted error message and plan excerpt against the real tool with a throwaway config in the scratchpad before putting it in the text or the answer key
 
