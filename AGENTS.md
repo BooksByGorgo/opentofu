@@ -29,6 +29,7 @@ the booklet is its own repo opentofu. it copies the gorgo booklet layout from cp
 - pandoc markdown; do not use emdash or endash, use --- or -- instead
 - refer to the reader as `you`; tone professional but light; emojis are fine
 - setup instructions always cover macOS, Linux, and Windows (winget ids: OpenTofu.Tofu, GoLang.Go, Kubernetes.kind, Kubernetes.kubectl); ch00 has the PowerShell translation table for the shell syntax the sessions use, so sessions stay POSIX
+- say "correct", not "right", for correctness ("right now" and "right-hand" are fine)
 - do not use the word "shape" in prose; say form, pattern, or example (the oracle `shape` argument in code is the one exception)
 - do not wrap sentences. every sentence gets its own line
 - configuration blocks are fenced as `terraform` (pandoc has no `hcl` highlighter); also `go`, `dockerfile`, `yaml`; plain fences only for file contents that have no highlighter (go.mod, templates)
