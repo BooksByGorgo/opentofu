@@ -1,0 +1,5 @@
+compartment_ocid   = "ocid1.tenancy.oc1..aaaaaaaa..."
+domain             = "example.com"
+cloudflare_zone_id = "0123456789abcdef0123456789abcdef"
+acme_email         = "you@example.com"
+admin_cidr         = "203.0.113.7/32"

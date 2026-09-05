@@ -1,0 +1,14 @@
+# generated PDFs and LaTeX auxiliary files
+*.pdf
+*.idx
+*.ilg
+*.ind
+# latexmk leftovers if a build is interrupted
+*.aux
+*.log
+*.toc
+*.out
+*.bbl
+*.blg
+*.fls
+*.fdb_latexmk
