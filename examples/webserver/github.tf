@@ -1,7 +1,7 @@
 resource "github_repository" "motd" {
-  name        = "motd"
+  name        = "tasting-tofu-motd"
   description = "message of the day web server"
-  visibility  = "public"
+  visibility  = "private"
 }
 
 output "clone_url" {
