@@ -42,7 +42,7 @@ the booklet is its own repo opentofu. it copies the gorgo booklet layout from cp
 
 # examples
 
-- every configuration shown in the booklet is in `examples/`, one self-contained root module per chapter, named as the chapter names it (`hello-world`, `webserver`, `database`, `kubernetes`, `oracle/infra`, `oracle/app`) plus `examples/modules/`; chapters name directories explicitly ("create the directory `hello-world`"), never "a directory"
+- every configuration shown in the booklet is in `examples/`, one self-contained root module per chapter, named as the chapter names it (`hello-world`, `webserver`, `database`, `kubernetes`, `oracle/infra`, `oracle/app`) plus `examples/motd` (the sayings module, pulled from github) and `examples/modules/`; chapters name directories explicitly ("create the directory `hello-world`"), never "a directory"
 - `terraform`, `go`, `yaml`, and `dockerfile` blocks in chapters must match the example files verbatim (modulo comments and blocks marked `# ...`); exercise snippets are the exception
 - each chapter that changes the go program carries its own copy of `app/`; keep the copies identical where the chapter did not change them
 - run `tofu fmt -check -recursive` in `examples/` and `tofu validate` in every root module before calling a change done
@@ -52,9 +52,9 @@ the booklet is its own repo opentofu. it copies the gorgo booklet layout from cp
 
 # the sayings
 
-- 60 subjects x 60 predicates in `modules/sayings/main.tf` (and the chapter 3 copy in `database/sayings.tf`); `setproduct` gives saying `n` = subject `n / 60` + predicate `n % 60`, keyed by `minute * 60 + second` of local time
-- every saying is third person singular present tense so any subject fits any predicate; no apostrophes or quotes, the template escapes them anyway
-- keep the two copies of the lists identical
+- 60 prefixes (`examples/motd/prefix.txt`) x 60 suffixes (`examples/motd/suffix.txt`), one per line; `examples/motd/main.tf` is a data-only module with outputs `prefixes`, `suffixes`, `sayings`, and `sql`; `setproduct` gives saying `n` = prefix `n / 60` + suffix `n % 60`, keyed by `minute * 60 + second` of local time
+- every saying is third person singular present tense so any prefix fits any suffix; no apostrophes or quotes, the template escapes them anyway
+- chapters 3, 4, and 5 pull the module from `github.com/BooksByGorgo/opentofu//examples/motd?ref=main`, so a change to `examples/motd` must be pushed before the examples (and `tofu init` in them) see it; `database/sayings.sql.tftpl` is chapter 3's own copy of the template and must stay identical to `motd/sayings.sql.tftpl`
 
 # citations
 

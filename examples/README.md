@@ -12,7 +12,7 @@ Replace `tofu` with `terraform` if that is what you use.
 | `kubernetes` | 4 | the same on a kind cluster, using the modules |
 | `oracle/infra` | 5 | an Oracle Cloud free tier machine, a Cloudflare DNS record, a Let's Encrypt certificate |
 | `oracle/app` | 5 | the chapter 3 module deployed to that machine over ssh behind a Caddy TLS proxy |
-| `modules/sayings` | 4 | data-only module: the sayings list and the seed SQL |
+| `motd` | 3 | the prefix and suffix word lists and a data-only module that chapters 3 to 5 pull from this repository on GitHub |
 | `modules/motd-k8s` | 4 | the application as Kubernetes objects |
 | `modules/motd-docker` | 5 | the application as docker containers on any docker host |
 
