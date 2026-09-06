@@ -1,0 +1,60 @@
+A patient programmer
+The wise sysadmin
+Every good deploy
+A well-tested function
+The midnight pager
+A careful reviewer
+The forgotten backup
+A clean git history
+The tired intern
+A flaky test
+The last-minute hotfix
+A thoughtful commit message
+The senior engineer
+A silent log file
+The Friday release
+A curious student
+The production database
+A leaky abstraction
+The overworked build server
+A humble bug report
+The confident architect
+A stale cache
+The lonely null pointer
+A gentle refactor
+The unread manual
+A brave beginner
+The monitoring dashboard
+A well-named variable
+The legacy system
+A quiet cron job
+The eager optimizer
+A missing semicolon
+The on-call engineer
+A tidy workspace
+The cloud bill
+A sleepy reviewer
+The rubber duck
+A rolling restart
+The ancient shell script
+A cautious release manager
+The compiler
+A good night of sleep
+The retry loop
+A stubborn race condition
+The whiteboard
+A generous mentor
+The load balancer
+A hidden dependency
+The debugger
+A calm incident commander
+The infinite loop
+A fresh pot of coffee
+The garbage collector
+A single source of truth
+The chatty microservice
+An honest postmortem
+The idle CPU
+A patient teacher
+The Monday standup
+A brand-new laptop

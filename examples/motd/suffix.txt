@@ -1,0 +1,60 @@
+never blames the compiler.
+starts every day with a backup.
+reads the error message twice.
+knows that the network is not reliable.
+writes the test before the fix.
+measures before optimizing.
+never deploys on a Friday.
+keeps its secrets out of git.
+trusts the plan but verifies the apply.
+asks why before asking how.
+leaves the code cleaner than it found it.
+remembers that cache invalidation is hard.
+knows that naming things is harder.
+counts from zero.
+treats warnings as errors.
+sleeps better with monitoring.
+rolls back without shame.
+learns something from every outage.
+prefers boring technology.
+documents the why, not just the what.
+never trusts user input.
+fears the silent failure most of all.
+finds the bug in the last place it looks.
+is only as strong as its weakest test.
+knows that off-by-one errors come in pairs.
+reboots first and asks questions later.
+commits early and commits often.
+rarely regrets a small pull request.
+respects the eight-hundred-pound legacy system.
+cannot outrun a bad data model.
+waits for the health check to pass.
+keeps one eye on the logs.
+does not argue with the linter.
+prefers a working ugly thing to a beautiful broken one.
+grows wiser with every stack trace.
+never runs rm -rf without looking twice.
+knows that premature optimization is the root of all evil.
+expects the unexpected input.
+is happiest with a green build.
+writes it down before forgetting it.
+pins its versions.
+reads the changelog before upgrading.
+is patient with beginners.
+knows that every abstraction leaks eventually.
+checks the time zone before checking the code.
+lets the computer do the repetitive work.
+keeps the rollback plan next to the deploy plan.
+tests the restore, not just the backup.
+speaks softly and carries a big stack trace.
+knows that DNS is always the problem.
+is never surprised by a full disk.
+answers the pager with a cup of coffee.
+does one thing and does it well.
+treats infrastructure like code.
+destroys what it creates.
+plans twice and applies once.
+keeps the state file safe.
+reviews the diff before saying yes.
+asks for help sooner rather than later.
+makes tomorrow easier than today.
