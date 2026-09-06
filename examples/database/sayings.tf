@@ -1,136 +1,40 @@
-# 60 subjects x 60 predicates = 3600 sayings, one for every second of the hour.
-# Saying number n pairs subject n / 60 with predicate n % 60.
+# 60 prefixes x 60 suffixes = 3600 sayings, one for every second of the hour.
+# Saying number n pairs prefix n / 60 with suffix n % 60.
+# The two lists live in the booklet's repository, one entry per line.
 locals {
-  subjects = [
-    "A patient programmer",
-    "The wise sysadmin",
-    "Every good deploy",
-    "A well-tested function",
-    "The midnight pager",
-    "A careful reviewer",
-    "The forgotten backup",
-    "A clean git history",
-    "The tired intern",
-    "A flaky test",
-    "The last-minute hotfix",
-    "A thoughtful commit message",
-    "The senior engineer",
-    "A silent log file",
-    "The Friday release",
-    "A curious student",
-    "The production database",
-    "A leaky abstraction",
-    "The overworked build server",
-    "A humble bug report",
-    "The confident architect",
-    "A stale cache",
-    "The lonely null pointer",
-    "A gentle refactor",
-    "The unread manual",
-    "A brave beginner",
-    "The monitoring dashboard",
-    "A well-named variable",
-    "The legacy system",
-    "A quiet cron job",
-    "The eager optimizer",
-    "A missing semicolon",
-    "The on-call engineer",
-    "A tidy workspace",
-    "The cloud bill",
-    "A sleepy reviewer",
-    "The rubber duck",
-    "A rolling restart",
-    "The ancient shell script",
-    "A cautious release manager",
-    "The compiler",
-    "A good night of sleep",
-    "The retry loop",
-    "A stubborn race condition",
-    "The whiteboard",
-    "A generous mentor",
-    "The load balancer",
-    "A hidden dependency",
-    "The debugger",
-    "A calm incident commander",
-    "The infinite loop",
-    "A fresh pot of coffee",
-    "The garbage collector",
-    "A single source of truth",
-    "The chatty microservice",
-    "An honest postmortem",
-    "The idle CPU",
-    "A patient teacher",
-    "The Monday standup",
-    "A brand-new laptop",
-  ]
+  motd_url = "https://raw.githubusercontent.com/BooksByGorgo/opentofu/main/examples/motd"
+}
 
-  predicates = [
-    "never blames the compiler.",
-    "starts every day with a backup.",
-    "reads the error message twice.",
-    "knows that the network is not reliable.",
-    "writes the test before the fix.",
-    "measures before optimizing.",
-    "never deploys on a Friday.",
-    "keeps its secrets out of git.",
-    "trusts the plan but verifies the apply.",
-    "asks why before asking how.",
-    "leaves the code cleaner than it found it.",
-    "remembers that cache invalidation is hard.",
-    "knows that naming things is harder.",
-    "counts from zero.",
-    "treats warnings as errors.",
-    "sleeps better with monitoring.",
-    "rolls back without shame.",
-    "learns something from every outage.",
-    "prefers boring technology.",
-    "documents the why, not just the what.",
-    "never trusts user input.",
-    "fears the silent failure most of all.",
-    "finds the bug in the last place it looks.",
-    "is only as strong as its weakest test.",
-    "knows that off-by-one errors come in pairs.",
-    "reboots first and asks questions later.",
-    "commits early and commits often.",
-    "rarely regrets a small pull request.",
-    "respects the eight-hundred-pound legacy system.",
-    "cannot outrun a bad data model.",
-    "waits for the health check to pass.",
-    "keeps one eye on the logs.",
-    "does not argue with the linter.",
-    "prefers a working ugly thing to a beautiful broken one.",
-    "grows wiser with every stack trace.",
-    "never runs rm -rf without looking twice.",
-    "knows that premature optimization is the root of all evil.",
-    "expects the unexpected input.",
-    "is happiest with a green build.",
-    "writes it down before forgetting it.",
-    "pins its versions.",
-    "reads the changelog before upgrading.",
-    "is patient with beginners.",
-    "knows that every abstraction leaks eventually.",
-    "checks the time zone before checking the code.",
-    "lets the computer do the repetitive work.",
-    "keeps the rollback plan next to the deploy plan.",
-    "tests the restore, not just the backup.",
-    "speaks softly and carries a big stack trace.",
-    "knows that DNS is always the problem.",
-    "is never surprised by a full disk.",
-    "answers the pager with a cup of coffee.",
-    "does one thing and does it well.",
-    "treats infrastructure like code.",
-    "destroys what it creates.",
-    "plans twice and applies once.",
-    "keeps the state file safe.",
-    "reviews the diff before saying yes.",
-    "asks for help sooner rather than later.",
-    "makes tomorrow easier than today.",
-  ]
+data "http" "prefix" {
+  url = "${local.motd_url}/prefix.txt"
 
-  # setproduct pairs every subject with every predicate, subjects first:
-  # [[s0, p0], [s0, p1], ..., [s1, p0], ...]
+  lifecycle {
+    postcondition {
+      condition     = self.status_code == 200
+      error_message = "could not fetch prefix.txt: HTTP ${self.status_code}"
+    }
+  }
+}
+
+data "http" "suffix" {
+  url = "${local.motd_url}/suffix.txt"
+
+  lifecycle {
+    postcondition {
+      condition     = self.status_code == 200
+      error_message = "could not fetch suffix.txt: HTTP ${self.status_code}"
+    }
+  }
+}
+
+locals {
+  prefixes = split("\n", trimspace(data.http.prefix.response_body))
+  suffixes = split("\n", trimspace(data.http.suffix.response_body))
+
+  # setproduct pairs every prefix with every suffix, prefixes first:
+  # [[p0, s0], [p0, s1], ..., [p1, s0], ...]
   sayings = [
-    for pair in setproduct(local.subjects, local.predicates) :
+    for pair in setproduct(local.prefixes, local.suffixes) :
     "${pair[0]} ${pair[1]}"
   ]
 }
