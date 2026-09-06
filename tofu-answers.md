@@ -232,10 +232,10 @@ Each iteration emits the index, a colon, the name, and a comma except on the las
 
 ---
 
-**3. Calculation:** At 14:05:09 local time, which saying does the server return, as a subject index and a predicate index?
+**3. Calculation:** At 14:05:09 local time, which saying does the server return, as a prefix index and a suffix index?
 Which second of which minute returns `local.sayings[3599]`?
 
-**Answer:** The key is `5 * 60 + 9 = 309`, which is subject `309 / 60 = 5` and predicate `309 % 60 = 9`: "A careful reviewer asks why before asking how."
+**Answer:** The key is `5 * 60 + 9 = 309`, which is prefix `309 / 60 = 5` and suffix `309 % 60 = 9`: "A careful reviewer asks why before asking how."
 Key 3599 is minute 59, second 59: `59 * 60 + 59`.
 
 ---
