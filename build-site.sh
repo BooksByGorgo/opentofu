@@ -95,8 +95,8 @@ build_book_pdfs() {
 # <style> block injected via --include-in-header.  callout.lua emits a CSS
 # class span instead of an <img> when --metadata single-page-callouts=true is
 # set, so the data URI never repeats no matter how many callout boxes exist.
-# book.css is also inlined in the same <style> block; no --embed-resources
-# needed.
+# book.css is also inlined in the same <style> block, and the copy button
+# script after it; no --embed-resources needed.
 build_single_page() {
     local src_dir="$1" dest_subdir="$2" title="$3"
     local html_dst="$DOCS/$dest_subdir/${dest_subdir}-book.html"
@@ -137,6 +137,12 @@ build_single_page() {
                 "$kind" "$(base64 -w0 "$img")"
         done
         printf '</style>\n'
+        # The copy button script the Jekyll pages load, inlined.
+        if [ -f "$DOCS/assets/js/copy-code.js" ]; then
+            printf '<script>\n'
+            cat "$DOCS/assets/js/copy-code.js"
+            printf '</script>\n'
+        fi
     } > "$header_file"
 
     if ! (cd "$src_dir" && pandoc "${srcs[@]}" \

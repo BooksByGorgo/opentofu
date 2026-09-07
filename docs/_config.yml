@@ -14,6 +14,10 @@ aux_links:
 
 color_scheme: light
 
+# the theme button only knows rouge blocks; assets/js/copy-code.js covers
+# the pandoc and session blocks instead
+enable_copy_code_button: false
+
 footer_content: >-
   Licensed under <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>.
 

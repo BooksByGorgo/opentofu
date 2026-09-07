@@ -193,3 +193,43 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; }
     h2   { font-size: 1.2rem; }
     pre  { padding: 0.75rem; }
 }
+
+/* copy button on code blocks (added by assets/js/copy-code.js) */
+.copy-code-wrapper {
+    position: relative;
+}
+
+.copy-code-wrapper > pre {
+    margin-top: 0;
+}
+
+.copy-code-button {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-size: 0.75rem;
+    line-height: 1.4;
+    color: #444;
+    background: #fff;
+    border: 1px solid #bbb;
+    border-radius: 4px;
+    cursor: pointer;
+    opacity: 0.55;
+    transition: opacity 0.15s;
+}
+
+.copy-code-wrapper:hover .copy-code-button,
+.copy-code-button:focus {
+    opacity: 1;
+}
+
+.copy-code-button.copied {
+    color: #1a7f37;
+    border-color: #1a7f37;
+    opacity: 1;
+}
