@@ -19,7 +19,7 @@ nav_order: 1
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  }</span>
 <span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
 <p>That is the whole thing. Before running it, read it the way the tool does.</p>
-<p> The language is made of <strong>blocks</strong>. A block has a type (<code>resource</code>), zero or more labels in quotes (<code>"terraform_data"</code> and <code>"hello"</code>), and a body in braces holding <strong>arguments</strong> (<code>command = "..."</code>) and nested blocks (<code>provisioner</code>). Think of a block as a paragraph that describes one thing. A <code>#</code> starts a comment that runs to the end of the line; the tool ignores it, and the next reader is grateful for it.</p>
+<p> The language is made of <strong>blocks</strong>. A block has a type (<code>resource</code>), zero or more labels in quotes (<code>"terraform_data"</code> and <code>"hello"</code>), and a body in braces holding <strong>arguments</strong> (<code>command = "..."</code>) and nested blocks (<code>provisioner</code>). Think of a block as a paragraph that describes one thing.</p>
 <p>   A <code>resource</code> block is a noun: a thing that should exist. Its first label is the resource <strong>type</strong>, which decides what kind of thing it is and which arguments it accepts. <code>terraform_data</code> is a built-in resource type that manages nothing at all. It is a placeholder: a thing that exists only so that you can attach behavior to it or hang other things off it. That makes it perfect for a first example, because it needs no accounts, no plugins, and no network. Its second label is the <strong>name</strong>, which is how the rest of the configuration refers to this particular one. Together they form the address <code>terraform_data.hello</code>.</p>
 <p>  A <code>provisioner</code> block says “when this resource is created, also do this”. <code>local-exec</code> runs a shell command on the machine where you run <code>tofu</code>. Provisioners are an escape hatch that you will use rarely in real work (see Appendix A), but they let the tool run <code>echo</code>, which is exactly what you want right now.</p>
 <h2 data-number="1.2" id="the-workflow"><span class="header-section-number">1.2</span> The workflow</h2>
@@ -119,12 +119,13 @@ terraform_data.hello</pre>
 <span id="cb2-27"><a href="#cb2-27" aria-hidden="true" tabindex="-1"></a>  description <span class="op">=</span> <span class="st">&quot;What was printed.&quot;</span></span>
 <span id="cb2-28"><a href="#cb2-28" aria-hidden="true" tabindex="-1"></a>  value       <span class="op">=</span> terraform_data.hello.<span class="kw">output</span></span>
 <span id="cb2-29"><a href="#cb2-29" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
-<p>There is a lot of new syntax here, so take it a block at a time, and read the comments as you go.</p>
+<p>There is a lot of new syntax here, so take it a block at a time. <code>#</code> starts a comment that runs to the end of the line; the tool ignores it, and the next reader is grateful for it. Read the comments in this example to better understand what the code is doing.</p>
 <p>  The <code>terraform</code> block holds settings for the tool itself. <code>required_version</code> refuses to run with a tool older than 1.6 — the release where OpenTofu began. A version constraint is a promise about what you tested with. It means a colleague with an old install gets a clear error instead of a strange one.</p>
 <p>  A <code>variable</code> block declares an <strong>input variable</strong>: a value the user of the configuration can set. Think of it as a function parameter. <code>type</code> says what kind of value is allowed, <code>description</code> explains what the variable is for, and <code>default</code> makes it optional. A variable without a default must be supplied, or <code>apply</code> will stop and ask for it.</p>
 <p> Inside expressions the variable is <code>var.greeting</code>. The <code>var.</code> prefix is there so that variables cannot be confused with resources.</p>
 <p> <code>"echo '${self.input}'"</code> is a string with an <strong>interpolation</strong>. Read <code>${...}</code> as “paste the value of this expression here”. Anything outside the braces is literal text. When the whole value is one expression, you do not need a string at all: <code>input = var.greeting</code> refers to the value directly instead of pasting it into text.</p>
-<p> <code>self</code> is the resource the provisioner belongs to. <code>terraform_data</code> has an <code>input</code> argument that stores any value you like and an <code>output</code> attribute that echoes it back after creation. Together they are a convenient way to move a value into the provisioner.</p>
+<p> <code>self</code> is the resource the provisioner belongs to — in this case, a <code>terraform_data</code> resource. Two of its fields matter to the provisioner: the <code>input</code> argument stores any value you like, and the <code>output</code> attribute is set to the same value as <code>input</code> after creation. Together they are a convenient way to move a value into the provisioner. You cannot add fields of your own. <code>terraform_data</code> has exactly <code>input</code>, <code>triggers_replace</code>, <code>output</code>, and <code>id</code>. If you want to pass more values, you could use an object as the input. For example:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>input <span class="op">=</span> { greeting <span class="op">=</span> <span class="st">&quot;hola&quot;</span>, repeat <span class="op">=</span> <span class="dv">3</span> }</span></code></pre></div>
 <p>  An <code>output</code> block declares an <strong>output value</strong>: something the configuration reports when it finishes. It is the return value of the function. Outputs are printed at the end of <code>apply</code>, and you can read them any time with <code>tofu output</code>:</p>
 <pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ tofu output</b>
 greeting = "hello world"</pre>
@@ -136,8 +137,27 @@ hello world</pre>
 <pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ tofu apply -var 'greeting=hola mundo'</b></pre>
 <pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ TF_VAR_greeting='hola mundo' tofu apply</b></pre>
 <p>Or put values in a file named <code>terraform.tfvars</code>, which is loaded automatically:</p>
-<div class="sourceCode" id="cb3"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>greeting <span class="op">=</span> <span class="st">&quot;hola mundo&quot;</span></span></code></pre></div>
-<p>The command line wins over the file, which wins over the environment, which wins over the default. The environment form is how you pass values from scripts and CI without putting them on a command line where <code>ps</code> can see them.</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>greeting <span class="op">=</span> <span class="st">&quot;hola mundo&quot;</span></span></code></pre></div>
+<p> The same file can be written as JSON under the name <code>terraform.tfvars.json</code>, which is the form to reach for when a script writes the values instead of a person:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode json"><code class="sourceCode json"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;greeting&quot;</span><span class="fu">:</span> <span class="st">&quot;hola mundo&quot;</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div>
+<p>The environment form is how you pass values from scripts and CI without putting them on a command line where <code>ps</code> can see them.</p>
+<p>  Nothing stops you from using several of these at once, so the tool reads every source it can find and lets the later ones overwrite the earlier ones. From weakest to strongest:</p>
+<ol type="1">
+<li>the <code>default</code> in the <code>variable</code> block</li>
+<li><code>TF_VAR_greeting</code> in the environment</li>
+<li><code>terraform.tfvars</code></li>
+<li><code>terraform.tfvars.json</code></li>
+<li>every <code>*.auto.tfvars</code> and <code>*.auto.tfvars.json</code>, in alphabetical order by file name</li>
+<li><code>-var</code> and <code>-var-file</code> on the command line, in the order you write them</li>
+</ol>
+<p>The surprise in that list is the environment, which loses to every file. Set <code>greeting</code> in <code>terraform.tfvars</code> and <code>TF_VAR_greeting</code> is ignored, with nothing printed to say so.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> A value from <code>-var</code> or <code>TF_VAR_</code> is used for one command and then forgotten. Nothing writes it back to <code>terraform.tfvars</code>, and a root module’s variables are not kept in the state file either, so the value is gone when the command exits while whatever it built lives on. The next plan resolves the variable from the file or the default again and proposes to undo the change. If a value should stick, put it in a file.</p>
+</div></div>
 <h2 data-number="1.6" id="validation"><span class="header-section-number">1.6</span> Validation</h2>
 <p> A configuration can be wrong in several ways, and the tool checks for each kind in its own layer. The earlier a layer catches a problem, the cheaper it is.</p>
 <p> <strong>Layer 1: formatting.</strong> <code>tofu fmt</code> rewrites your files in the canonical style: two-space indentation, aligned <code>=</code> signs, no trailing spaces. Run it before every commit, or let your editor run it on save. CI runs <code>tofu fmt -check</code>, which exits non-zero if anything would change. <code>tofu fmt -diff</code> shows what it would rewrite, without rewriting it:</p>
@@ -212,7 +232,7 @@ Apply complete! Resources: 0 added, 0 changed, 0 destroyed.</pre>
 <ul>
 <li>A configuration describes an end state, not steps. Applying it twice is safe.</li>
 <li>The loop is <code>init</code>, <code>plan</code>, <code>apply</code>, and eventually <code>destroy</code>. Read the plan summary line first.</li>
-<li>State is the tool’s memory of what it created. Never edit it by hand and never commit it.</li>
+<li>State is the tool’s memory of what it created. Never edit it by hand, never commit it, and never lose it.</li>
 <li>A <code>resource</code> is a thing that should exist; <code>terraform_data</code> is a placeholder resource that exists so you can attach behavior to it.</li>
 <li><code>variable</code> blocks are the inputs and <code>output</code> blocks are the return values of a configuration.</li>
 <li>Validation happens in layers: <code>fmt</code> for style, <code>validate</code> for structure, <code>validation</code> blocks for values, and <code>plan</code> for reality.</li>
@@ -238,6 +258,10 @@ Apply complete! Resources: 0 added, 0 changed, 0 destroyed.</pre>
 <tr>
 <td style="text-align: left;"><code>provisioner "local-exec" { command = "..." }</code></td>
 <td style="text-align: left;">A command to run when the resource is created</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code># comment</code></td>
+<td style="text-align: left;">A comment, to the end of the line</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>terraform { required_version = "&gt;= 1.6" }</code></td>
@@ -275,41 +299,41 @@ Apply complete! Resources: 0 added, 0 changed, 0 destroyed.</pre>
 </table>
 <h2 data-number="1.10" id="try-it"><span class="header-section-number">1.10</span> Try It</h2>
 <ul>
-<li>Change the command to <code>date</code> and apply twice. Why does the time not update? Make it update on every apply with <code>triggers_replace = [timestamp()]</code>, and then read the plan to see what that costs you.</li>
+<li>Change the command to <code>date</code> and apply twice. Why does the time not update? Make it update on every apply with <code>triggers_replace = [timestamp()]</code>, and then read the plan to see what that does on every apply.</li>
 <li>Remove the <code>default</code> from the variable and run <code>tofu plan</code>. Then supply the value each of the three ways.</li>
 <li>Add a second <code>terraform_data</code> resource whose command prints the first one’s <code>output</code>, and look at which one runs first. Then reverse the reference and see the order flip.</li>
 <li>Save a plan with <code>tofu plan -out=hello.tfplan</code> and apply it with <code>tofu apply hello.tfplan</code>. Notice that the saved plan does not ask for confirmation.</li>
-<li>Delete <code>terraform.tfstate</code> after an apply and run <code>tofu apply</code> again. What happens and why? (This is why you make sure you never lose the state file for anything that matters.)</li>
+<li>Delete <code>terraform.tfstate</code> after an apply and run <code>tofu apply</code> again. What happens and why?</li>
 </ul>
 <h2 data-number="1.11" id="exercises"><span class="header-section-number">1.11</span> Exercises</h2>
 <ol type="1">
 <li><p><strong>Think about it:</strong> <code>tofu apply</code> prints hello world the first time and nothing the second time. Explain what the tool compared to decide there was nothing to do, and where each side of the comparison came from.</p></li>
 <li><p><strong>What does this do?</strong> Given this configuration and a fresh directory, what does <code>tofu apply -auto-approve</code> print, in order?</p>
-<div class="sourceCode" id="cb4"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;terraform_data&quot;</span> <span class="st">&quot;first&quot;</span> {</span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">provisioner</span> <span class="st">&quot;local-exec&quot;</span> {</span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>    command <span class="op">=</span> <span class="st">&quot;echo one&quot;</span></span>
-<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>  }</span>
-<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;terraform_data&quot;</span> <span class="st">&quot;second&quot;</span> {</span>
-<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>  input <span class="op">=</span> terraform_data.first.id</span>
-<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>  <span class="kw">provisioner</span> <span class="st">&quot;local-exec&quot;</span> {</span>
-<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>    command <span class="op">=</span> <span class="st">&quot;echo two&quot;</span></span>
-<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>  }</span>
-<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div></li>
+<div class="sourceCode" id="cb6"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;terraform_data&quot;</span> <span class="st">&quot;first&quot;</span> {</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">provisioner</span> <span class="st">&quot;local-exec&quot;</span> {</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>    command <span class="op">=</span> <span class="st">&quot;echo one&quot;</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;terraform_data&quot;</span> <span class="st">&quot;second&quot;</span> {</span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>  input <span class="op">=</span> terraform_data.first.id</span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>  <span class="kw">provisioner</span> <span class="st">&quot;local-exec&quot;</span> {</span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>    command <span class="op">=</span> <span class="st">&quot;echo two&quot;</span></span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div></li>
 <li><p><strong>Calculation:</strong> A configuration has three <code>terraform_data</code> resources, each with <code>triggers_replace = [var.tag]</code>, and the state was applied with <code>tag = "a"</code>. What is the plan summary line for <code>tofu plan -var tag=b</code>?</p></li>
 <li><p><strong>Where is the bug?</strong></p>
-<div class="sourceCode" id="cb5"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">variable</span> <span class="st">&quot;name&quot;</span> {</span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  type    <span class="op">=</span> <span class="dt">string</span></span>
-<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>  default <span class="op">=</span> <span class="st">&quot;gorgo&quot;</span></span>
-<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;terraform_data&quot;</span> <span class="st">&quot;greet&quot;</span> {</span>
-<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>  <span class="kw">provisioner</span> <span class="st">&quot;local-exec&quot;</span> {</span>
-<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>    command <span class="op">=</span> <span class="st">&quot;echo hello var.name&quot;</span></span>
-<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>  }</span>
-<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div></li>
+<div class="sourceCode" id="cb7"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">variable</span> <span class="st">&quot;name&quot;</span> {</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  type    <span class="op">=</span> <span class="dt">string</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>  default <span class="op">=</span> <span class="st">&quot;gorgo&quot;</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;terraform_data&quot;</span> <span class="st">&quot;greet&quot;</span> {</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>  <span class="kw">provisioner</span> <span class="st">&quot;local-exec&quot;</span> {</span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>    command <span class="op">=</span> <span class="st">&quot;echo hello var.name&quot;</span></span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div></li>
 <li><p><strong>Write a configuration</strong> with a variable <code>path</code> that must end in <code>.txt</code> (use <code>endswith</code>), and a resource that writes the current date into that file with <code>date &gt; path</code>. Make sure a second apply does not rewrite the file, and that changing <code>path</code> does.</p></li>
 </ol>
 
