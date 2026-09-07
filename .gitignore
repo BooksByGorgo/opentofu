@@ -1,14 +1,28 @@
-# generated PDFs and LaTeX auxiliary files
-*.pdf
-*.idx
-*.ilg
-*.ind
-# latexmk leftovers if a build is interrupted
-*.aux
-*.log
-*.toc
-*.out
-*.bbl
-*.blg
-*.fls
-*.fdb_latexmk
+# generated book PDFs --- built by tasting/Makefile from the .md sources
+tasting/*.pdf
+docs/tasting/*.pdf
+
+# LaTeX auxiliary files from pandoc + latexmk builds
+tasting/*.idx
+tasting/*.ilg
+tasting/*.ind
+tasting/*.aux
+tasting/*.log
+tasting/*.toc
+tasting/*.out
+tasting/*.bbl
+tasting/*.blg
+tasting/*.fls
+tasting/*.fdb_latexmk
+tasting/luatex.*/
+
+# jekyll
+docs/_site/
+docs/.jekyll-cache/
+docs/Gemfile.lock
+docs/vendor/
+docs/.bundle/
+
+# editors and local tool settings
+*.swp
+.claude/settings.local.json

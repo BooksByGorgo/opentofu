@@ -2,7 +2,7 @@
 
 a short gorgo-style booklet, "Gorgo Tasting OpenTofu and Terraform", that teaches infrastructure as code by building a message-of-the-second web server: echo hello world, a go web server in docker, a mysql database of 3600 sayings, the same on kubernetes, and finally on an oracle cloud free tier VM with cloudflare DNS and a let's encrypt certificate.
 
-the booklet is its own repo opentofu. it copies the gorgo booklet layout from cpp but is self-contained: `callout.lua` and `images/` are local copies (paths patched from `../images` to `images`).
+the booklet is its own repo opentofu, organized like ../go: the book lives in `tasting/` (chapters, Makefile, `callout.lua`, `session.lua`, `book.css`, `examples/`), `images/` is shared at the repo root (`callout.lua` and the front matter reference it as `../images`), and `build-site.sh` builds the github pages site under `docs/`.
 
 # opentofu and terraform
 
@@ -42,19 +42,19 @@ the booklet is its own repo opentofu. it copies the gorgo booklet layout from cp
 
 # examples
 
-- every configuration shown in the booklet is in `examples/`, one self-contained root module per chapter, named as the chapter names it (`hello-world`, `webserver`, `database`, `kubernetes`, `oracle/infra`, `oracle/app`) plus `examples/motd` (the sayings module, pulled from github) and `examples/modules/`; chapters name directories explicitly ("create the directory `hello-world`"), never "a directory"
+- every configuration shown in the booklet is in `tasting/examples/`, one self-contained root module per chapter, named as the chapter names it (`hello-world`, `webserver`, `database`, `kubernetes`, `oracle/infra`, `oracle/app`) plus `examples/motd` (the sayings module, pulled from github) and `examples/modules/`; chapters name directories explicitly ("create the directory `hello-world`"), never "a directory"
 - `terraform`, `go`, `yaml`, and `dockerfile` blocks in chapters must match the example files verbatim (modulo comments and blocks marked `# ...`); exercise snippets are the exception
 - each chapter that changes the go program carries its own copy of `app/`; keep the copies identical where the chapter did not change them
-- run `tofu fmt -check -recursive` in `examples/` and `tofu validate` in every root module before calling a change done
+- run `tofu fmt -check -recursive` in `tasting/examples/` and `tofu validate` in every root module before calling a change done
 - test applies before quoting output: chapters 1--4 and the chapter 5 app stage (with `-var docker_host=unix:///var/run/docker.sock` and a fake infra state) run locally; chapter 5 infra can only be `tofu init` + `tofu validate` without oracle and cloudflare credentials
-- `examples/.gitignore` ignores lock files on purpose (the examples must init on any platform); appendix A explains that real projects commit them
+- `tasting/examples/.gitignore` ignores lock files on purpose (the examples must init on any platform); appendix A explains that real projects commit them
 - never commit state files, `.terraform/`, or a `.tfvars` with a secret; `example.tfvars` is the committed template
 
 # the sayings
 
-- 60 prefixes (`examples/motd/prefix.txt`) x 60 suffixes (`examples/motd/suffix.txt`), one per line; `examples/motd/main.tf` is a data-only module with outputs `prefixes`, `suffixes`, `sayings`, and `sql`; `setproduct` gives saying `n` = prefix `n / 60` + suffix `n % 60`, keyed by `minute * 60 + second` of local time
+- 60 prefixes (`tasting/examples/motd/prefix.txt`) x 60 suffixes (`tasting/examples/motd/suffix.txt`), one per line; `tasting/examples/motd/main.tf` is a data-only module with outputs `prefixes`, `suffixes`, `sayings`, and `sql`; `setproduct` gives saying `n` = prefix `n / 60` + suffix `n % 60`, keyed by `minute * 60 + second` of local time
 - every saying is third person singular present tense so any prefix fits any suffix; no apostrophes or quotes, the template escapes them anyway
-- chapters 3, 4, and 5 pull the module from `github.com/BooksByGorgo/opentofu//examples/motd?ref=main`, so a change to `examples/motd` must be pushed before the examples (and `tofu init` in them) see it; `database/sayings.sql.tftpl` is chapter 3's own copy of the template and must stay identical to `motd/sayings.sql.tftpl`
+- chapters 3, 4, and 5 pull the module from `github.com/BooksByGorgo/opentofu//tasting/examples/motd?ref=main`, so a change to `tasting/examples/motd` must be pushed before the examples (and `tofu init` in them) see it; `database/sayings.sql.tftpl` is chapter 3's own copy of the template and must stay identical to `motd/sayings.sql.tftpl`
 
 # citations
 
@@ -65,14 +65,22 @@ the booklet is its own repo opentofu. it copies the gorgo booklet layout from cp
 
 # build
 
-- `make` builds `tofu.pdf`, `tofu-answers.pdf`, and one PDF per chapter with pandoc + latexmk (lualatex); PDFs are gitignored
+- `make` in `tasting/` builds `tofu.pdf`, `tofu-answers.pdf`, and one PDF per chapter with pandoc + latexmk (lualatex); PDFs are gitignored
 - fonts: TeX Gyre Pagella and JetBrains Mono with noto fallbacks, as in ~/git/cpp
-- the title page uses `images/tofu-gorgo-with-badge.png`
+- the title page uses `../images/tofu-gorgo-with-badge.png`
+
+# site
+
+- `bash build-site.sh` from the repo root runs the Makefile, converts every chapter, the conclusion, the appendices, and the answer key to a just-the-docs page in `docs/tasting/`, copies the PDFs next to them, builds the single page `docs/tasting/tasting-book.html`, and writes `docs/_includes/tasting-chapters.html`; the generated HTML is committed like in ../go, the PDFs under `docs/` are gitignored
+- the chapter pages run citeproc, so appendix A gets its own reference list; `bibliography.md` is appended to any chapter that cites something to give that list its heading
+- `.github/workflows/pages.yml` builds and deploys the site on every push to main; the site is `https://gorgo.dev/opentofu`
+- to check the site locally: `cd docs && bundle exec jekyll build -d ../_site` (bundler is in `~/.local/share/gem/ruby/3.3.0/bin`, the gems in `docs/vendor/bundle`, both gitignored)
+- `docs/index.md` and `docs/tasting.md` are hand-written; everything else under `docs/tasting/` and `docs/_includes/tasting-chapters.html` is generated, do not edit it
 
 # verify the booklet
 
 - mechanical (script it): no `bash` fences (sessions only); blank line before every `::: {.tip}`; every callout body starts with a label; fence opens equal fence closes; code lines within limits; no unicode dashes outside code; no `\index{}` in code blocks; blank line after `\index{}` before lists
-- build to `.tex` in a scratch dir and run latexmk there to get a log; look for `Overfull \hbox` of 10pt or more, `undefined`, and `Missing character`
+- build to `.tex` in a scratch dir with `../images` reachable (a symlink to the repo's `images/`) and run latexmk there to get a log; look for `Overfull \hbox` of 10pt or more, `undefined`, and `Missing character`
 - `pdftotext tofu.pdf - | grep -E ':::|\{\.tip\}|\\index\{'` must print nothing
 - indentation must survive copying from the PDF: the front matter redefines fancyvrb's `\FV@Space` to a real space glyph with ActualText; check with `mutool draw -F txt tofu.pdf` (pdftotext trims leading spaces and cannot show this)
 - `pdftotext -bbox` word positions must stay inside 69..544pt; the LaTeX log must have no Overfull box at all (verbatim overflows produce small ones)
@@ -83,7 +91,7 @@ the booklet is its own repo opentofu. it copies the gorgo booklet layout from cp
 
 - tofu, kind, and kubectl are installed in ~/.local/bin; docker is the ubuntu snap
 - the snap docker cannot see `/tmp` or dot-directories, so `kind load docker-image` needs `TMPDIR=$HOME/tmp` (any visible directory under home)
-- the kind cluster for chapter 4 is created from `examples/kubernetes/kind-config.yaml` with `kind create cluster --name motd`; it maps host port 8080, so run chapter 3 with `-var port=8083` while the cluster exists
+- the kind cluster for chapter 4 is created from `tasting/examples/kubernetes/kind-config.yaml` with `kind create cluster --name motd`; it maps host port 8080, so run chapter 3 with `-var port=8083` while the cluster exists
 - delete the cluster, the `motd:*` images, and all state files when done testing
 
 # making changes

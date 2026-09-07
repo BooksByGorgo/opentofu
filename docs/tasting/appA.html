@@ -1,0 +1,630 @@
+---
+layout: default
+title: "Appendix A: Best Practices, Recommendations, and Common Errors"
+parent: "Gorgo Tasting OpenTofu and Terraform"
+nav_order: 100
+---
+
+{% raw %}
+<h1 id="best-practices-recommendations-and-common-errors">Best Practices, Recommendations, and Common Errors</h1>
+<p>This appendix is the booklet’s reference card. The chapters introduce these ideas where they come up; this is where they are collected, with the reasoning kept short and a pointer to the documentation for each item. Everything here applies to OpenTofu and Terraform alike unless a line says otherwise, and the two projects’ documentation sites cover the same ground in the same words most of the time <span class="citation" data-cites="OpenTofuDocs TerraformDocs">[1], [2]</span>.</p>
+<h2 id="best-practices">Best practices</h2>
+<h3 id="organizing-configuration">Organizing configuration</h3>
+<p></p>
+<ul>
+<li><strong>One directory per root module, one state per root module.</strong> A root module is a unit of <code>apply</code>. Things with different lifecycles (a cluster and what runs on it, infrastructure and application) go in different root modules, as Chapters 4 and 5 do <span class="citation" data-cites="OTF_ModuleComposition TerraformStyle">[3], [4]</span>.</li>
+<li><strong>Use the conventional file names.</strong> <code>versions.tf</code> (the <code>terraform</code> block), <code>providers.tf</code>, <code>variables.tf</code>, <code>outputs.tf</code>, <code>main.tf</code>, and more files named for what they hold (<code>network.tf</code>, <code>dns.tf</code>). The tool does not care; the next reader does <span class="citation" data-cites="OTF_ModuleStructure TerraformStyle">[4], [5]</span>.</li>
+<li><strong>Name resources for their role, not their type:</strong> <code>web</code>, not <code>web_container</code>. The type is already in the address. Use underscores in names, never dashes, and keep names short: they appear in every plan <span class="citation" data-cites="TerraformStyle OTF_Style">[4], [6]</span>.</li>
+<li><strong>Keep modules small and single purpose,</strong> with every variable described and every output named for what it is. A module is a function; write it like one <span class="citation" data-cites="OTF_ModuleStructure">[5]</span>.</li>
+<li><strong>Do not abstract too early.</strong> Three similar resources are fine. The third copy of a whole configuration is the moment to write a module <span class="citation" data-cites="OTF_ModuleDev">[7]</span>.</li>
+<li><strong>Give every variable a <code>type</code> and a <code>description</code>,</strong> and a <code>validation</code> block when a wrong value would fail late or expensively <span class="citation" data-cites="OTF_Variables">[8]</span>.</li>
+<li><strong>Prefer references to <code>depends_on</code>.</strong> A reference is a dependency the reader can see. Use <code>depends_on</code> only when nothing can be referenced, and comment why <span class="citation" data-cites="OTF_DependsOn">[9]</span>.</li>
+</ul>
+<h3 id="versions-and-providers">Versions and providers</h3>
+<p></p>
+<ul>
+<li><strong>Constrain the provider major version</strong> with <code>~&gt;</code> in <code>required_providers</code>, and set <code>required_version</code> to the oldest tool version you tested <span class="citation" data-cites="OTF_VersionConstraints OTF_ProviderRequirements">[10], [11]</span>.</li>
+<li><strong>Commit <code>.terraform.lock.hcl</code>.</strong> It pins exact provider versions and checksums so that everyone gets the same plugins. When the team spans platforms, run <code>tofu providers lock -platform=linux_amd64 -platform=darwin_arm64</code> and commit the result, or <code>init</code> on the other platform fails with a checksum error <span class="citation" data-cites="OTF_LockFile OTF_ProvidersLock">[12], [13]</span>. (The examples in this booklet ignore the lock file for that reason; a real project should not.)</li>
+<li><strong>Upgrade providers deliberately</strong> with <code>tofu init -upgrade</code>, read the changelog first, and commit the lock file change on its own <span class="citation" data-cites="OTF_Init">[14]</span>.</li>
+<li><strong>Never commit <code>.terraform/</code>.</strong> It is a cache <span class="citation" data-cites="OTF_LockFile">[12]</span>.</li>
+</ul>
+<h3 id="state">State</h3>
+<p></p>
+<ul>
+<li><strong>Never commit state.</strong> It holds secrets and it changes on every apply. <code>.gitignore</code> gets <code>*.tfstate</code>, <code>*.tfstate.*</code>, <code>.terraform/</code>, and <code>crash.log</code> before the first apply <span class="citation" data-cites="OTF_StateSensitive">[15]</span>.</li>
+<li><strong>Use a remote backend with locking</strong> as soon as two people or one CI job touch a configuration: S3 and compatible stores (Oracle Object Storage among them), Azure Blob, Google Cloud Storage, a Kubernetes secret, or an HTTP backend. Locking prevents two applies from interleaving; encryption at rest covers the secrets <span class="citation" data-cites="OTF_StateRemote OTF_StateLocking OTF_Backends">[16], [17], [18]</span>.</li>
+<li><strong>Never edit state by hand.</strong> <code>tofu state list</code>, <code>show</code>, <code>mv</code>, <code>rm</code>, and <code>tofu import</code> cover what is needed, and <code>moved</code>, <code>removed</code>, and <code>import</code> blocks do the same declaratively and reviewably <span class="citation" data-cites="OTF_StateCmd OTF_Refactoring OTF_Import">[19], [20], [21]</span>.</li>
+<li><strong>Back up state</strong> before anything unusual, with <code>tofu state pull &gt; backup.tfstate</code> <span class="citation" data-cites="OTF_StatePull">[22]</span>.</li>
+<li><strong>One state per environment,</strong> by directory or by backend key, not by <code>workspace</code> unless the differences are truly only variable values <span class="citation" data-cites="OTF_Workspaces">[23]</span>.</li>
+</ul>
+<h3 id="planning-and-applying">Planning and applying</h3>
+<p></p>
+<ul>
+<li><strong>Always read the plan.</strong> The summary line first, then every <code>-/+</code>. A replacement of anything stateful is a stop-and-think moment <span class="citation" data-cites="OTF_Plan">[24]</span>.</li>
+<li><strong>Save the plan in automation:</strong> <code>tofu plan -out=tfplan</code> then <code>tofu apply tfplan</code>. A saved plan applies exactly what was reviewed, and applying a stale one fails instead of surprising you <span class="citation" data-cites="OTF_Plan OTF_Apply">[24], [25]</span>.</li>
+<li><strong>Run <code>fmt</code>, <code>validate</code>, and <code>plan</code> in CI on every pull request,</strong> and apply from CI on merge, so that state changes are serialized and logged <span class="citation" data-cites="OTF_CoreWorkflow TF_Automate">[26], [27]</span>.</li>
+<li><strong>Avoid <code>-target</code>.</strong> It is for surgery, not routine. A configuration that needs <code>-target</code> to apply cleanly has a dependency problem to fix <span class="citation" data-cites="OTF_Plan">[24]</span>.</li>
+<li><strong>Do not <code>-auto-approve</code> anything that matters.</strong> Interactively, read and type <code>yes</code>; in CI, apply a saved plan that was reviewed <span class="citation" data-cites="OTF_Apply">[25]</span>.</li>
+<li><strong>Treat <code>destroy</code> as a real command.</strong> Protect stateful resources with <code>lifecycle { prevent_destroy = true }</code> and remove the protection only in the same change that intends the destruction <span class="citation" data-cites="OTF_Destroy OTF_Lifecycle">[28], [29]</span>.</li>
+</ul>
+<h3 id="secrets">Secrets</h3>
+<p></p>
+<ul>
+<li><strong>Credentials come from the environment or the vendor’s own config files,</strong> never from <code>.tf</code> or committed <code>.tfvars</code> files. <code>TF_VAR_name</code> sets a variable from the environment <span class="citation" data-cites="OTF_EnvVars OTF_ProviderConfiguration">[30], [31]</span>.</li>
+<li><strong>Mark secret variables and outputs <code>sensitive</code>,</strong> and wrap values read from another configuration’s outputs in <code>sensitive()</code> <span class="citation" data-cites="OTF_Variables OTF_SensitiveFn">[8], [32]</span>.</li>
+<li><strong>Remember that state holds the plain value regardless.</strong> Sensitivity is about the terminal and the logs; the backend’s access control is about the state <span class="citation" data-cites="OTF_StateSensitive">[15]</span>.</li>
+<li><strong>Generate secrets with the <code>random</code> provider or fetch them from a secret manager</strong> rather than typing them, so that they are never in a shell history <span class="citation" data-cites="RandomProvider">[33]</span>.</li>
+</ul>
+<h3 id="changing-infrastructure">Changing infrastructure</h3>
+<p></p>
+<ul>
+<li><strong>Prefer immutable artifacts.</strong> An image tagged with its content hash (Chapter 4) is a change the tool can see; <code>latest</code> is not <span class="citation" data-cites="K8sImages K8sConfigBest">[34], [35]</span>.</li>
+<li><strong>Provisioners are a last resort.</strong> They run only at creation, their failures leave resources tainted, and their commands are invisible to the plan. Prefer a provider, cloud-init, or a proper configuration management tool, and use <code>terraform_data</code> with <code>local-exec</code> for the small glue that has no better home <span class="citation" data-cites="OTF_Provisioners TF_TerraformData">[36], [37]</span>.</li>
+<li><strong>Make replacement chains explicit</strong> with <code>replace_triggered_by</code> when the provider cannot see the dependency (a seed file and the volume it loads into) <span class="citation" data-cites="OTF_Lifecycle">[29]</span>.</li>
+<li><strong>Add <code>precondition</code> and <code>postcondition</code> blocks</strong> for assumptions that would otherwise fail late, and <code>check</code> blocks for “did it work” <span class="citation" data-cites="OTF_CustomConditions OTF_Checks">[38], [39]</span>.</li>
+<li><strong>Refactor with <code>moved</code> blocks,</strong> not by destroying and recreating. Renaming a resource or moving it into a module is a <code>moved { from = ...; to = ... }</code> and a plan that says “no changes” <span class="citation" data-cites="OTF_Refactoring">[20]</span>.</li>
+</ul>
+<h2 id="recommendations">Recommendations</h2>
+<h3 id="tools">Tools</h3>
+<p></p>
+<ul>
+<li><code>tofu fmt -recursive</code> and <code>tofu validate</code> in a pre-commit hook <span class="citation" data-cites="OTF_Fmt OTF_Validate PreCommit">[40], [41], [42]</span>.</li>
+<li><strong>tflint</strong> for lint rules the tool does not enforce (unused variables, deprecated arguments, provider-specific checks) <span class="citation" data-cites="TFLint">[43]</span>.</li>
+<li><strong>trivy</strong> or <strong>checkov</strong> for security scanning of configurations (open security groups, unencrypted storage) <span class="citation" data-cites="Trivy Checkov">[44], [45]</span>.</li>
+<li><strong>terraform-docs</strong> to generate the variables and outputs tables of a module’s README from its files <span class="citation" data-cites="TerraformDocsTool">[46]</span>.</li>
+<li><strong>tenv</strong> (or a similar version manager) to install and switch between OpenTofu and Terraform versions per project <span class="citation" data-cites="Tenv">[47]</span>.</li>
+<li>An editor with the language server, which gives completion for every provider’s arguments <span class="citation" data-cites="OTF_LS">[48]</span>.</li>
+</ul>
+<h3 id="working-with-the-tool">Working with the tool</h3>
+<p></p>
+<ul>
+<li><code>tofu console</code> to try an expression before putting it in a file <span class="citation" data-cites="OTF_Console">[49]</span>.</li>
+<li><code>tofu show</code> to read the state or a saved plan; <code>tofu show -json tfplan</code> for scripts <span class="citation" data-cites="OTF_Show">[50]</span>.</li>
+<li><code>tofu graph | dot -Tsvg &gt; graph.svg</code> to see the dependency graph when the order surprises you <span class="citation" data-cites="OTF_Graph">[51]</span>.</li>
+<li><code>tofu plan -refresh-only</code> to see drift (changes made outside the tool) without planning any fixes, and <code>tofu apply -refresh-only</code> to accept it into the state <span class="citation" data-cites="OTF_Plan OTF_Refresh">[24], [52]</span>.</li>
+<li><code>tofu apply -replace=ADDRESS</code> to force one resource to be recreated, instead of tainting or deleting things <span class="citation" data-cites="OTF_Plan">[24]</span>.</li>
+<li><code>TF_LOG=DEBUG tofu plan</code> when a provider does something inexplicable; it prints every API call <span class="citation" data-cites="OTF_Debugging">[53]</span>.</li>
+<li><code>tofu test</code> with <code>.tftest.hcl</code> files for modules that deserve tests <span class="citation" data-cites="OTF_Test">[54]</span>.</li>
+<li><code>tofu providers schema -json</code> to see every argument a provider accepts when the documentation and reality disagree <span class="citation" data-cites="OTF_ProvidersSchema">[55]</span>.</li>
+</ul>
+<h3 id="staying-compatible-with-both-tools">Staying compatible with both tools</h3>
+<p></p>
+<p>Everything in this booklet works in both. Features to avoid, or to fence off, if a configuration must run under either <span class="citation" data-cites="OTF_Migration">[56]</span>:</p>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th style="text-align: left;">Only in OpenTofu</th>
+<th style="text-align: left;">Only in Terraform</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">State encryption (<code>encryption</code> block) <span class="citation" data-cites="OTF_Encryption">[57]</span></td>
+<td style="text-align: left;">HCP Terraform and <code>cloud</code> block features <span class="citation" data-cites="TF_Cloud">[58]</span></td>
+</tr>
+<tr>
+<td style="text-align: left;">Variables in <code>backend</code> and module <code>source</code> <span class="citation" data-cites="OTF_New18">[59]</span></td>
+<td style="text-align: left;">Terraform Stacks <span class="citation" data-cites="TF_Stacks">[60]</span></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>for_each</code> on <code>provider</code> blocks <span class="citation" data-cites="OTF_New19">[61]</span></td>
+<td style="text-align: left;"><code>ephemeral</code> resources and write-only arguments <span class="citation" data-cites="TF_Ephemeral TF_WriteOnly">[62], [63]</span></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>-exclude</code> flag <span class="citation" data-cites="OTF_New19">[61]</span></td>
+<td style="text-align: left;"><code>terraform query</code> and list resources <span class="citation" data-cites="TF_Query">[64]</span></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>.tofu</code> file extension <span class="citation" data-cites="OTF_New18">[59]</span></td>
+<td style="text-align: left;">Some newer built-in functions <span class="citation" data-cites="TerraformDocs">[2]</span></td>
+</tr>
+<tr>
+<td style="text-align: left;">Provider mirrors from OCI registries <span class="citation" data-cites="OTF_New110 OTF_OCI">[65], [66]</span></td>
+<td style="text-align: left;"></td>
+</tr>
+</tbody>
+</table>
+<p>Both have <code>check</code> blocks, <code>import</code>, <code>moved</code>, and <code>removed</code> blocks, <code>terraform_data</code>, provider-defined functions, and <code>test</code> <span class="citation" data-cites="OTF_New17">[67]</span>. The version numbers do not line up: OpenTofu started at 1.6 (equivalent to Terraform 1.5), so <code>required_version = "&gt;= 1.6"</code> means something slightly different under each tool <span class="citation" data-cites="OTF_Migration">[56]</span>.</p>
+<h2 id="common-errors">Common errors</h2>
+<p></p>
+<p>The message, what it usually means, and what to do. Messages are abbreviated.</p>
+<h3 id="setup">Setup</h3>
+<table>
+<colgroup>
+<col style="width: 40%" />
+<col style="width: 59%" />
+</colgroup>
+<thead>
+<tr>
+<th style="text-align: left;">Message</th>
+<th style="text-align: left;">Cause and fix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>Required plugins are not installed</code> or <code>Missing required provider</code></td>
+<td style="text-align: left;">Run <code>tofu init</code> <span class="citation" data-cites="OTF_Init">[14]</span>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Inconsistent dependency lock file</code></td>
+<td style="text-align: left;">The lock file and the constraints disagree; <code>tofu init</code> if a constraint changed, <code>tofu init -upgrade</code> to move to newer versions <span class="citation" data-cites="OTF_LockFile OTF_Init">[12], [14]</span>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Backend initialization required</code></td>
+<td style="text-align: left;">The backend settings changed; <code>tofu init -migrate-state</code> to move state, <code>-reconfigure</code> to point at existing state <span class="citation" data-cites="OTF_Init OTF_Backends">[14], [18]</span>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Failed to query available provider packages</code></td>
+<td style="text-align: left;">Wrong <code>source</code> address, a typo in the version, or no network. Check the registry page for the exact address <span class="citation" data-cites="OTF_ProviderRequirements">[11]</span>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Unsupported OpenTofu Core version</code></td>
+<td style="text-align: left;"><code>required_version</code> excludes the tool you are running; upgrade the tool or loosen the constraint <span class="citation" data-cites="OTF_Settings">[68]</span>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Error acquiring the state lock</code></td>
+<td style="text-align: left;">Another apply is running, or one crashed and left the lock; wait, then <code>tofu force-unlock ID</code> only when you are sure it is stale <span class="citation" data-cites="OTF_StateLocking OTF_ForceUnlock">[17], [69]</span>.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="configuration">Configuration</h3>
+<table>
+<colgroup>
+<col style="width: 40%" />
+<col style="width: 59%" />
+</colgroup>
+<thead>
+<tr>
+<th style="text-align: left;">Message</th>
+<th style="text-align: left;">Cause and fix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>Unsupported argument</code> (with “Did you mean”)</td>
+<td style="text-align: left;">A misspelled argument, or an argument from a different provider version <span class="citation" data-cites="OTF_Validate">[41]</span>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Missing required argument</code></td>
+<td style="text-align: left;">The resource type needs it; the docs list which are required <span class="citation" data-cites="OTF_ResourceSyntax">[70]</span>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Reference to undeclared resource</code> or <code>undeclared input variable</code></td>
+<td style="text-align: left;">A typo in a reference, or a missing <code>variable</code> block. Remember <code>var.</code>, <code>local.</code>, <code>data.</code>, <code>module.</code> prefixes <span class="citation" data-cites="OTF_References">[71]</span>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Invalid function argument</code> or <code>Invalid template interpolation value</code></td>
+<td style="text-align: left;">A type mismatch, often a number where a string is needed; use <code>tostring</code>, <code>tonumber</code>, or check the type in <code>tofu console</code> <span class="citation" data-cites="OTF_Types OTF_ToString">[72], [73]</span>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Invalid for_each argument ... known after apply</code></td>
+<td style="text-align: left;"><code>for_each</code> keys must be known at plan time; use static keys, derive them from configuration rather than from another resource’s attributes, or split into two applies <span class="citation" data-cites="OTF_ForEach">[74]</span>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Cycle:</code> followed by addresses</td>
+<td style="text-align: left;">Resources reference each other in a loop; break it with a data source, a local, or by removing an unneeded <code>depends_on</code> <span class="citation" data-cites="OTF_GraphInternals OTF_DependsOn">[9], [75]</span>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Duplicate resource</code></td>
+<td style="text-align: left;">Two blocks with the same type and name, often in two files <span class="citation" data-cites="OTF_ResourceSyntax">[70]</span>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Invalid value for variable</code></td>
+<td style="text-align: left;">A <code>validation</code> block rejected the value; the message is whatever the author wrote <span class="citation" data-cites="OTF_Variables">[8]</span>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Resource precondition failed</code></td>
+<td style="text-align: left;">A <code>precondition</code> was false; fix the assumption or the configuration <span class="citation" data-cites="OTF_CustomConditions">[38]</span>.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="planning-and-applying-1">Planning and applying</h3>
+<table>
+<colgroup>
+<col style="width: 40%" />
+<col style="width: 59%" />
+</colgroup>
+<thead>
+<tr>
+<th style="text-align: left;">Message</th>
+<th style="text-align: left;">Cause and fix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>Saved plan is stale</code></td>
+<td style="text-align: left;">State changed since the plan was saved; plan again <span class="citation" data-cites="OTF_Apply">[25]</span>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Objects have changed outside of OpenTofu</code></td>
+<td style="text-align: left;">Drift. Read what changed; <code>apply -refresh-only</code> to accept it, or a normal apply to revert it <span class="citation" data-cites="OTF_Plan OTF_Refresh">[24], [52]</span>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Provider produced inconsistent final plan</code></td>
+<td style="text-align: left;">A provider bug or a value that changed between plan and apply; re-run, then report it if it repeats <span class="citation" data-cites="OTF_Debugging">[53]</span>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Instance cannot be destroyed</code></td>
+<td style="text-align: left;"><code>prevent_destroy</code> is doing its job; remove it deliberately if you mean it <span class="citation" data-cites="OTF_Lifecycle">[29]</span>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>local-exec provisioner error</code></td>
+<td style="text-align: left;">The command failed; the resource is tainted and the next apply recreates it. Fix the command <span class="citation" data-cites="OTF_Provisioners">[36]</span>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Check block assertion failed</code></td>
+<td style="text-align: left;">A warning: the apply succeeded but the check did not. Look at what the check tests <span class="citation" data-cites="OTF_Checks">[39]</span>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Provider configuration not present</code></td>
+<td style="text-align: left;">A resource in state belongs to a provider you removed from the configuration; add the provider back long enough to destroy it, or <code>tofu state rm</code> it <span class="citation" data-cites="OTF_ProviderConfiguration">[31]</span>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Error: ... already exists</code> or HTTP 409</td>
+<td style="text-align: left;">The thing exists but not in state; <code>tofu import</code> it or an <code>import</code> block, or remove the stray one <span class="citation" data-cites="OTF_Import OTF_ImportCli">[21], [76]</span>.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="providers-used-in-this-booklet">Providers used in this booklet</h3>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th style="text-align: left;">Message</th>
+<th style="text-align: left;">Cause and fix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>Bind for 0.0.0.0:8080 failed: port is already allocated</code></td>
+<td style="text-align: left;">Another process or container owns the port; change the variable <span class="citation" data-cites="DockerNetwork">[77]</span>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Conflict. The container name "/motd-db" is already in use</code></td>
+<td style="text-align: left;">A container the tool does not know about; remove it or import it <span class="citation" data-cites="DockerRun OTF_ImportCli">[76], [78]</span>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Cannot connect to the Docker daemon</code></td>
+<td style="text-align: left;">Docker is not running, or the socket needs your user in the <code>docker</code> group, or the <code>host</code> is wrong <span class="citation" data-cites="DockerPostInstall DockerProvider">[79], [80]</span>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>timed out waiting for the condition</code> (Kubernetes)</td>
+<td style="text-align: left;">The rollout never became ready; <code>kubectl describe pod</code> and <code>kubectl logs</code> say why <span class="citation" data-cites="K8sProviderDeployment K8sDebugPods">[81], [82]</span>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>ImagePullBackOff</code></td>
+<td style="text-align: left;">The cluster cannot pull the image: not loaded into kind, not pushed to the registry, or no pull secret <span class="citation" data-cites="K8sImages KindLoad">[34], [83]</span>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Unauthorized</code> (Kubernetes)</td>
+<td style="text-align: left;">The kubeconfig context is wrong or expired <span class="citation" data-cites="K8sKubeconfig">[84]</span>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Out of host capacity</code> (Oracle)</td>
+<td style="text-align: left;">No free tier machines in that availability domain; try another <code>ad_index</code> or region <span class="citation" data-cites="OCIFreeTier OracleFreeTier">[85], [86]</span>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>NotAuthorizedOrNotFound</code> (Oracle)</td>
+<td style="text-align: left;">The compartment OCID is wrong, or the profile in <code>~/.oci/config</code> lacks permission, or the region differs from the resource’s <span class="citation" data-cites="OCIErrors OCIProvider">[87], [88]</span>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Authentication error (10000)</code> (Cloudflare)</td>
+<td style="text-align: left;">The token is missing, wrong, or lacks <code>Zone.DNS: Edit</code> on that zone <span class="citation" data-cites="CFToken CFProvider">[89], [90]</span>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>urn:ietf:params:acme:error:rateLimited</code></td>
+<td style="text-align: left;">Too many certificates for the name; wait, and use the staging server while testing <span class="citation" data-cites="LERateLimits LEStaging LetsEncrypt">[91], [92], [93]</span>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>NXDOMAIN</code> during the DNS challenge</td>
+<td style="text-align: left;">The TXT record has not propagated; the provider retries, and a low TTL on the zone helps <span class="citation" data-cites="ACMEProvider LEChallenges">[94], [95]</span>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Permission denied (publickey)</code> over SSH</td>
+<td style="text-align: left;">The key in <code>ssh_public_key</code> is not the one your agent offers, or cloud-init has not finished creating the user <span class="citation" data-cites="OCIAccess CloudInit">[96], [97]</span>.</td>
+</tr>
+</tbody>
+</table>
+<h1 class="unnumbered" id="references">References</h1>
+<div id="refs" class="references csl-bib-body" data-entry-spacing="0" role="list">
+<div id="ref-OpenTofuDocs" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[1] </div><div class="csl-right-inline">OpenTofu Project, <span>“<span>OpenTofu</span> documentation.”</span> 2026. Available: <a href="https://opentofu.org/docs/">https://opentofu.org/docs/</a></div>
+</div>
+<div id="ref-TerraformDocs" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[2] </div><div class="csl-right-inline">HashiCorp, <span>“<span>Terraform</span> documentation.”</span> 2026. Available: <a href="https://developer.hashicorp.com/terraform/docs">https://developer.hashicorp.com/terraform/docs</a></div>
+</div>
+<div id="ref-OTF_ModuleComposition" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[3] </div><div class="csl-right-inline">OpenTofu Project, <span>“Module composition.”</span> 2026. Available: <a href="https://opentofu.org/docs/language/modules/develop/composition/">https://opentofu.org/docs/language/modules/develop/composition/</a></div>
+</div>
+<div id="ref-TerraformStyle" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[4] </div><div class="csl-right-inline">HashiCorp, <span>“<span>Terraform</span> style guide.”</span> 2026. Available: <a href="https://developer.hashicorp.com/terraform/language/style">https://developer.hashicorp.com/terraform/language/style</a></div>
+</div>
+<div id="ref-OTF_ModuleStructure" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[5] </div><div class="csl-right-inline">OpenTofu Project, <span>“Standard module structure.”</span> 2026. Available: <a href="https://opentofu.org/docs/language/modules/develop/structure/">https://opentofu.org/docs/language/modules/develop/structure/</a></div>
+</div>
+<div id="ref-OTF_Style" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[6] </div><div class="csl-right-inline">OpenTofu Project, <span>“Style conventions.”</span> 2026. Available: <a href="https://opentofu.org/docs/language/syntax/style/">https://opentofu.org/docs/language/syntax/style/</a></div>
+</div>
+<div id="ref-OTF_ModuleDev" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[7] </div><div class="csl-right-inline">OpenTofu Project, <span>“Creating modules.”</span> 2026. Available: <a href="https://opentofu.org/docs/language/modules/develop/">https://opentofu.org/docs/language/modules/develop/</a></div>
+</div>
+<div id="ref-OTF_Variables" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[8] </div><div class="csl-right-inline">OpenTofu Project, <span>“Input variables.”</span> 2026. Available: <a href="https://opentofu.org/docs/language/values/variables/">https://opentofu.org/docs/language/values/variables/</a></div>
+</div>
+<div id="ref-OTF_DependsOn" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[9] </div><div class="csl-right-inline">OpenTofu Project, <span>“The depends_on meta-argument.”</span> 2026. Available: <a href="https://opentofu.org/docs/language/meta-arguments/depends_on/">https://opentofu.org/docs/language/meta-arguments/depends_on/</a></div>
+</div>
+<div id="ref-OTF_VersionConstraints" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[10] </div><div class="csl-right-inline">OpenTofu Project, <span>“Version constraints.”</span> 2026. Available: <a href="https://opentofu.org/docs/language/expressions/version-constraints/">https://opentofu.org/docs/language/expressions/version-constraints/</a></div>
+</div>
+<div id="ref-OTF_ProviderRequirements" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[11] </div><div class="csl-right-inline">OpenTofu Project, <span>“Provider requirements.”</span> 2026. Available: <a href="https://opentofu.org/docs/language/providers/requirements/">https://opentofu.org/docs/language/providers/requirements/</a></div>
+</div>
+<div id="ref-OTF_LockFile" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[12] </div><div class="csl-right-inline">OpenTofu Project, <span>“Dependency lock file.”</span> 2026. Available: <a href="https://opentofu.org/docs/language/files/dependency-lock/">https://opentofu.org/docs/language/files/dependency-lock/</a></div>
+</div>
+<div id="ref-OTF_ProvidersLock" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[13] </div><div class="csl-right-inline">OpenTofu Project, <span>“Command: Providers lock.”</span> 2026. Available: <a href="https://opentofu.org/docs/cli/commands/providers/lock/">https://opentofu.org/docs/cli/commands/providers/lock/</a></div>
+</div>
+<div id="ref-OTF_Init" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[14] </div><div class="csl-right-inline">OpenTofu Project, <span>“Command: init.”</span> 2026. Available: <a href="https://opentofu.org/docs/cli/commands/init/">https://opentofu.org/docs/cli/commands/init/</a></div>
+</div>
+<div id="ref-OTF_StateSensitive" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[15] </div><div class="csl-right-inline">OpenTofu Project, <span>“Sensitive data in state.”</span> 2026. Available: <a href="https://opentofu.org/docs/language/state/sensitive-data/">https://opentofu.org/docs/language/state/sensitive-data/</a></div>
+</div>
+<div id="ref-OTF_StateRemote" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[16] </div><div class="csl-right-inline">OpenTofu Project, <span>“Remote state.”</span> 2026. Available: <a href="https://opentofu.org/docs/language/state/remote/">https://opentofu.org/docs/language/state/remote/</a></div>
+</div>
+<div id="ref-OTF_StateLocking" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[17] </div><div class="csl-right-inline">OpenTofu Project, <span>“State locking.”</span> 2026. Available: <a href="https://opentofu.org/docs/language/state/locking/">https://opentofu.org/docs/language/state/locking/</a></div>
+</div>
+<div id="ref-OTF_Backends" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[18] </div><div class="csl-right-inline">OpenTofu Project, <span>“Backend configuration.”</span> 2026. Available: <a href="https://opentofu.org/docs/language/settings/backends/configuration/">https://opentofu.org/docs/language/settings/backends/configuration/</a></div>
+</div>
+<div id="ref-OTF_StateCmd" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[19] </div><div class="csl-right-inline">OpenTofu Project, <span>“Command: state.”</span> 2026. Available: <a href="https://opentofu.org/docs/cli/commands/state/">https://opentofu.org/docs/cli/commands/state/</a></div>
+</div>
+<div id="ref-OTF_Refactoring" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[20] </div><div class="csl-right-inline">OpenTofu Project, <span>“Refactoring.”</span> 2026. Available: <a href="https://opentofu.org/docs/language/modules/develop/refactoring/">https://opentofu.org/docs/language/modules/develop/refactoring/</a></div>
+</div>
+<div id="ref-OTF_Import" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[21] </div><div class="csl-right-inline">OpenTofu Project, <span>“Import.”</span> 2026. Available: <a href="https://opentofu.org/docs/language/import/">https://opentofu.org/docs/language/import/</a></div>
+</div>
+<div id="ref-OTF_StatePull" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[22] </div><div class="csl-right-inline">OpenTofu Project, <span>“Command: State pull.”</span> 2026. Available: <a href="https://opentofu.org/docs/cli/commands/state/pull/">https://opentofu.org/docs/cli/commands/state/pull/</a></div>
+</div>
+<div id="ref-OTF_Workspaces" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[23] </div><div class="csl-right-inline">OpenTofu Project, <span>“Workspaces.”</span> 2026. Available: <a href="https://opentofu.org/docs/language/state/workspaces/">https://opentofu.org/docs/language/state/workspaces/</a></div>
+</div>
+<div id="ref-OTF_Plan" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[24] </div><div class="csl-right-inline">OpenTofu Project, <span>“Command: plan.”</span> 2026. Available: <a href="https://opentofu.org/docs/cli/commands/plan/">https://opentofu.org/docs/cli/commands/plan/</a></div>
+</div>
+<div id="ref-OTF_Apply" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[25] </div><div class="csl-right-inline">OpenTofu Project, <span>“Command: apply.”</span> 2026. Available: <a href="https://opentofu.org/docs/cli/commands/apply/">https://opentofu.org/docs/cli/commands/apply/</a></div>
+</div>
+<div id="ref-OTF_CoreWorkflow" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[26] </div><div class="csl-right-inline">OpenTofu Project, <span>“The core <span>OpenTofu</span> workflow.”</span> 2026. Available: <a href="https://opentofu.org/docs/intro/core-workflow/">https://opentofu.org/docs/intro/core-workflow/</a></div>
+</div>
+<div id="ref-TF_Automate" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[27] </div><div class="csl-right-inline">HashiCorp, <span>“Running <span>Terraform</span> in automation.”</span> 2026. Available: <a href="https://developer.hashicorp.com/terraform/tutorials/automation/automate-terraform">https://developer.hashicorp.com/terraform/tutorials/automation/automate-terraform</a></div>
+</div>
+<div id="ref-OTF_Destroy" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[28] </div><div class="csl-right-inline">OpenTofu Project, <span>“Command: destroy.”</span> 2026. Available: <a href="https://opentofu.org/docs/cli/commands/destroy/">https://opentofu.org/docs/cli/commands/destroy/</a></div>
+</div>
+<div id="ref-OTF_Lifecycle" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[29] </div><div class="csl-right-inline">OpenTofu Project, <span>“The lifecycle meta-argument.”</span> 2026. Available: <a href="https://opentofu.org/docs/language/meta-arguments/lifecycle/">https://opentofu.org/docs/language/meta-arguments/lifecycle/</a></div>
+</div>
+<div id="ref-OTF_EnvVars" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[30] </div><div class="csl-right-inline">OpenTofu Project, <span>“Environment variables.”</span> 2026. Available: <a href="https://opentofu.org/docs/cli/config/environment-variables/">https://opentofu.org/docs/cli/config/environment-variables/</a></div>
+</div>
+<div id="ref-OTF_ProviderConfiguration" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[31] </div><div class="csl-right-inline">OpenTofu Project, <span>“Provider configuration.”</span> 2026. Available: <a href="https://opentofu.org/docs/language/providers/configuration/">https://opentofu.org/docs/language/providers/configuration/</a></div>
+</div>
+<div id="ref-OTF_SensitiveFn" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[32] </div><div class="csl-right-inline">OpenTofu Project, <span>“Sensitive function.”</span> 2026. Available: <a href="https://opentofu.org/docs/language/functions/sensitive/">https://opentofu.org/docs/language/functions/sensitive/</a></div>
+</div>
+<div id="ref-RandomProvider" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[33] </div><div class="csl-right-inline">HashiCorp, <span>“<span>Terraform</span> provider for random: random_password.”</span> 2026. Available: <a href="https://github.com/hashicorp/terraform-provider-random/blob/main/docs/resources/password.md">https://github.com/hashicorp/terraform-provider-random/blob/main/docs/resources/password.md</a></div>
+</div>
+<div id="ref-K8sImages" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[34] </div><div class="csl-right-inline">The Kubernetes Authors, <span>“Images.”</span> 2026. Available: <a href="https://kubernetes.io/docs/concepts/containers/images/">https://kubernetes.io/docs/concepts/containers/images/</a></div>
+</div>
+<div id="ref-K8sConfigBest" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[35] </div><div class="csl-right-inline">The Kubernetes Authors, <span>“Configuration best practices.”</span> 2026. Available: <a href="https://kubernetes.io/docs/concepts/configuration/overview/">https://kubernetes.io/docs/concepts/configuration/overview/</a></div>
+</div>
+<div id="ref-OTF_Provisioners" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[36] </div><div class="csl-right-inline">OpenTofu Project, <span>“Provisioners.”</span> 2026. Available: <a href="https://opentofu.org/docs/language/resources/provisioners/syntax/">https://opentofu.org/docs/language/resources/provisioners/syntax/</a></div>
+</div>
+<div id="ref-TF_TerraformData" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[37] </div><div class="csl-right-inline">HashiCorp, <span>“The terraform_data managed resource type.”</span> 2026. Available: <a href="https://developer.hashicorp.com/terraform/language/resources/terraform-data">https://developer.hashicorp.com/terraform/language/resources/terraform-data</a></div>
+</div>
+<div id="ref-OTF_CustomConditions" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[38] </div><div class="csl-right-inline">OpenTofu Project, <span>“Custom condition checks.”</span> 2026. Available: <a href="https://opentofu.org/docs/language/expressions/custom-conditions/">https://opentofu.org/docs/language/expressions/custom-conditions/</a></div>
+</div>
+<div id="ref-OTF_Checks" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[39] </div><div class="csl-right-inline">OpenTofu Project, <span>“Checks with assertions.”</span> 2026. Available: <a href="https://opentofu.org/docs/language/checks/">https://opentofu.org/docs/language/checks/</a></div>
+</div>
+<div id="ref-OTF_Fmt" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[40] </div><div class="csl-right-inline">OpenTofu Project, <span>“Command: fmt.”</span> 2026. Available: <a href="https://opentofu.org/docs/cli/commands/fmt/">https://opentofu.org/docs/cli/commands/fmt/</a></div>
+</div>
+<div id="ref-OTF_Validate" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[41] </div><div class="csl-right-inline">OpenTofu Project, <span>“Command: validate.”</span> 2026. Available: <a href="https://opentofu.org/docs/cli/commands/validate/">https://opentofu.org/docs/cli/commands/validate/</a></div>
+</div>
+<div id="ref-PreCommit" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[42] </div><div class="csl-right-inline">A. Babenko, <span>“Pre-commit-terraform.”</span> 2026. Available: <a href="https://github.com/antonbabenko/pre-commit-terraform">https://github.com/antonbabenko/pre-commit-terraform</a></div>
+</div>
+<div id="ref-TFLint" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[43] </div><div class="csl-right-inline">TFLint Contributors, <span>“<span>TFLint</span>: A pluggable <span>Terraform</span> linter.”</span> 2026. Available: <a href="https://github.com/terraform-linters/tflint">https://github.com/terraform-linters/tflint</a></div>
+</div>
+<div id="ref-Trivy" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[44] </div><div class="csl-right-inline">Aqua Security, <span>“Trivy.”</span> 2026. Available: <a href="https://trivy.dev/">https://trivy.dev/</a></div>
+</div>
+<div id="ref-Checkov" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[45] </div><div class="csl-right-inline">Prisma Cloud, <span>“Checkov.”</span> 2026. Available: <a href="https://www.checkov.io/">https://www.checkov.io/</a></div>
+</div>
+<div id="ref-TerraformDocsTool" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[46] </div><div class="csl-right-inline">terraform-docs Contributors, <span>“Terraform-docs.”</span> 2026. Available: <a href="https://terraform-docs.io/">https://terraform-docs.io/</a></div>
+</div>
+<div id="ref-Tenv" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[47] </div><div class="csl-right-inline">tofuutils, <span>“Tenv: <span>OpenTofu</span> and <span>Terraform</span> version manager.”</span> 2026. Available: <a href="https://github.com/tofuutils/tenv">https://github.com/tofuutils/tenv</a></div>
+</div>
+<div id="ref-OTF_LS" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[48] </div><div class="csl-right-inline">OpenTofu Project, <span>“<span>OpenTofu</span> language server.”</span> 2026. Available: <a href="https://github.com/opentofu/tofu-ls">https://github.com/opentofu/tofu-ls</a></div>
+</div>
+<div id="ref-OTF_Console" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[49] </div><div class="csl-right-inline">OpenTofu Project, <span>“Command: console.”</span> 2026. Available: <a href="https://opentofu.org/docs/cli/commands/console/">https://opentofu.org/docs/cli/commands/console/</a></div>
+</div>
+<div id="ref-OTF_Show" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[50] </div><div class="csl-right-inline">OpenTofu Project, <span>“Command: show.”</span> 2026. Available: <a href="https://opentofu.org/docs/cli/commands/show/">https://opentofu.org/docs/cli/commands/show/</a></div>
+</div>
+<div id="ref-OTF_Graph" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[51] </div><div class="csl-right-inline">OpenTofu Project, <span>“Command: graph.”</span> 2026. Available: <a href="https://opentofu.org/docs/cli/commands/graph/">https://opentofu.org/docs/cli/commands/graph/</a></div>
+</div>
+<div id="ref-OTF_Refresh" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[52] </div><div class="csl-right-inline">OpenTofu Project, <span>“Command: refresh.”</span> 2026. Available: <a href="https://opentofu.org/docs/cli/commands/refresh/">https://opentofu.org/docs/cli/commands/refresh/</a></div>
+</div>
+<div id="ref-OTF_Debugging" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[53] </div><div class="csl-right-inline">OpenTofu Project, <span>“Debugging <span>OpenTofu</span>.”</span> 2026. Available: <a href="https://opentofu.org/docs/internals/debugging/">https://opentofu.org/docs/internals/debugging/</a></div>
+</div>
+<div id="ref-OTF_Test" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[54] </div><div class="csl-right-inline">OpenTofu Project, <span>“Command: test.”</span> 2026. Available: <a href="https://opentofu.org/docs/cli/commands/test/">https://opentofu.org/docs/cli/commands/test/</a></div>
+</div>
+<div id="ref-OTF_ProvidersSchema" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[55] </div><div class="csl-right-inline">OpenTofu Project, <span>“Command: Providers schema.”</span> 2026. Available: <a href="https://opentofu.org/docs/cli/commands/providers/schema/">https://opentofu.org/docs/cli/commands/providers/schema/</a></div>
+</div>
+<div id="ref-OTF_Migration" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[56] </div><div class="csl-right-inline">OpenTofu Project, <span>“Migrating to <span>OpenTofu</span> from <span>Terraform</span>.”</span> 2026. Available: <a href="https://opentofu.org/docs/intro/migration/">https://opentofu.org/docs/intro/migration/</a></div>
+</div>
+<div id="ref-OTF_Encryption" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[57] </div><div class="csl-right-inline">OpenTofu Project, <span>“State and plan encryption.”</span> 2026. Available: <a href="https://opentofu.org/docs/language/state/encryption/">https://opentofu.org/docs/language/state/encryption/</a></div>
+</div>
+<div id="ref-TF_Cloud" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[58] </div><div class="csl-right-inline">HashiCorp, <span>“<span>HCP</span> <span>Terraform</span> documentation.”</span> 2026. Available: <a href="https://developer.hashicorp.com/terraform/cloud-docs">https://developer.hashicorp.com/terraform/cloud-docs</a></div>
+</div>
+<div id="ref-OTF_New18" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[59] </div><div class="csl-right-inline">OpenTofu Project, <span>“What’s new in <span>OpenTofu</span> 1.8.”</span> 2026. Available: <a href="https://opentofu.org/docs/v1.8/intro/whats-new/">https://opentofu.org/docs/v1.8/intro/whats-new/</a></div>
+</div>
+<div id="ref-TF_Stacks" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[60] </div><div class="csl-right-inline">HashiCorp, <span>“<span>Terraform</span> stacks.”</span> 2026. Available: <a href="https://developer.hashicorp.com/terraform/language/stacks">https://developer.hashicorp.com/terraform/language/stacks</a></div>
+</div>
+<div id="ref-OTF_New19" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[61] </div><div class="csl-right-inline">OpenTofu Project, <span>“What’s new in <span>OpenTofu</span> 1.9.”</span> 2026. Available: <a href="https://opentofu.org/docs/v1.9/intro/whats-new/">https://opentofu.org/docs/v1.9/intro/whats-new/</a></div>
+</div>
+<div id="ref-TF_Ephemeral" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[62] </div><div class="csl-right-inline">HashiCorp, <span>“Ephemeral resources.”</span> 2026. Available: <a href="https://developer.hashicorp.com/terraform/language/resources/ephemeral">https://developer.hashicorp.com/terraform/language/resources/ephemeral</a></div>
+</div>
+<div id="ref-TF_WriteOnly" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[63] </div><div class="csl-right-inline">HashiCorp, <span>“Write-only arguments.”</span> 2026. Available: <a href="https://developer.hashicorp.com/terraform/language/resources/ephemeral/write-only">https://developer.hashicorp.com/terraform/language/resources/ephemeral/write-only</a></div>
+</div>
+<div id="ref-TF_Query" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[64] </div><div class="csl-right-inline">HashiCorp, <span>“Command: query.”</span> 2026. Available: <a href="https://developer.hashicorp.com/terraform/cli/commands/query">https://developer.hashicorp.com/terraform/cli/commands/query</a></div>
+</div>
+<div id="ref-OTF_New110" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[65] </div><div class="csl-right-inline">OpenTofu Project, <span>“What’s new in <span>OpenTofu</span> 1.10.”</span> 2026. Available: <a href="https://opentofu.org/docs/v1.10/intro/whats-new/">https://opentofu.org/docs/v1.10/intro/whats-new/</a></div>
+</div>
+<div id="ref-OTF_OCI" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[66] </div><div class="csl-right-inline">OpenTofu Project, <span>“<span>OCI</span> registries.”</span> 2026. Available: <a href="https://opentofu.org/docs/cli/oci_registries/">https://opentofu.org/docs/cli/oci_registries/</a></div>
+</div>
+<div id="ref-OTF_New17" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[67] </div><div class="csl-right-inline">OpenTofu Project, <span>“What’s new in <span>OpenTofu</span> 1.7.”</span> 2026. Available: <a href="https://opentofu.org/docs/v1.7/intro/whats-new/">https://opentofu.org/docs/v1.7/intro/whats-new/</a></div>
+</div>
+<div id="ref-OTF_Settings" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[68] </div><div class="csl-right-inline">OpenTofu Project, <span>“<span>OpenTofu</span> settings.”</span> 2026. Available: <a href="https://opentofu.org/docs/language/settings/">https://opentofu.org/docs/language/settings/</a></div>
+</div>
+<div id="ref-OTF_ForceUnlock" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[69] </div><div class="csl-right-inline">OpenTofu Project, <span>“Command: Force-unlock.”</span> 2026. Available: <a href="https://opentofu.org/docs/cli/commands/force-unlock/">https://opentofu.org/docs/cli/commands/force-unlock/</a></div>
+</div>
+<div id="ref-OTF_ResourceSyntax" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[70] </div><div class="csl-right-inline">OpenTofu Project, <span>“Resource blocks.”</span> 2026. Available: <a href="https://opentofu.org/docs/language/resources/syntax/">https://opentofu.org/docs/language/resources/syntax/</a></div>
+</div>
+<div id="ref-OTF_References" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[71] </div><div class="csl-right-inline">OpenTofu Project, <span>“References to named values.”</span> 2026. Available: <a href="https://opentofu.org/docs/language/expressions/references/">https://opentofu.org/docs/language/expressions/references/</a></div>
+</div>
+<div id="ref-OTF_Types" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[72] </div><div class="csl-right-inline">OpenTofu Project, <span>“Types and values.”</span> 2026. Available: <a href="https://opentofu.org/docs/language/expressions/types/">https://opentofu.org/docs/language/expressions/types/</a></div>
+</div>
+<div id="ref-OTF_ToString" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[73] </div><div class="csl-right-inline">OpenTofu Project, <span>“Tostring function.”</span> 2026. Available: <a href="https://opentofu.org/docs/language/functions/tostring/">https://opentofu.org/docs/language/functions/tostring/</a></div>
+</div>
+<div id="ref-OTF_ForEach" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[74] </div><div class="csl-right-inline">OpenTofu Project, <span>“The for_each meta-argument.”</span> 2026. Available: <a href="https://opentofu.org/docs/language/meta-arguments/for_each/">https://opentofu.org/docs/language/meta-arguments/for_each/</a></div>
+</div>
+<div id="ref-OTF_GraphInternals" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[75] </div><div class="csl-right-inline">OpenTofu Project, <span>“Resource graph.”</span> 2026. Available: <a href="https://opentofu.org/docs/internals/graph/">https://opentofu.org/docs/internals/graph/</a></div>
+</div>
+<div id="ref-OTF_ImportCli" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[76] </div><div class="csl-right-inline">OpenTofu Project, <span>“Command: import.”</span> 2026. Available: <a href="https://opentofu.org/docs/cli/import/">https://opentofu.org/docs/cli/import/</a></div>
+</div>
+<div id="ref-DockerNetwork" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[77] </div><div class="csl-right-inline">Docker Inc., <span>“Networking overview.”</span> 2026. Available: <a href="https://docs.docker.com/engine/network/">https://docs.docker.com/engine/network/</a></div>
+</div>
+<div id="ref-DockerRun" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[78] </div><div class="csl-right-inline">Docker Inc., <span>“Docker container run.”</span> 2026. Available: <a href="https://docs.docker.com/reference/cli/docker/container/run/">https://docs.docker.com/reference/cli/docker/container/run/</a></div>
+</div>
+<div id="ref-DockerPostInstall" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[79] </div><div class="csl-right-inline">Docker Inc., <span>“Linux post-installation steps for docker engine.”</span> 2026. Available: <a href="https://docs.docker.com/engine/install/linux-postinstall/">https://docs.docker.com/engine/install/linux-postinstall/</a></div>
+</div>
+<div id="ref-DockerProvider" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[80] </div><div class="csl-right-inline">kreuzwerker, <span>“<span>Terraform</span> provider for docker: docker_container.”</span> 2026. Available: <a href="https://github.com/kreuzwerker/terraform-provider-docker/blob/master/docs/resources/container.md">https://github.com/kreuzwerker/terraform-provider-docker/blob/master/docs/resources/container.md</a></div>
+</div>
+<div id="ref-K8sProviderDeployment" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[81] </div><div class="csl-right-inline">HashiCorp, <span>“<span>Terraform</span> provider for kubernetes: kubernetes_deployment_v1.”</span> 2026. Available: <a href="https://github.com/hashicorp/terraform-provider-kubernetes/blob/main/docs/resources/deployment_v1.md">https://github.com/hashicorp/terraform-provider-kubernetes/blob/main/docs/resources/deployment_v1.md</a></div>
+</div>
+<div id="ref-K8sDebugPods" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[82] </div><div class="csl-right-inline">The Kubernetes Authors, <span>“Debug pods.”</span> 2026. Available: <a href="https://kubernetes.io/docs/tasks/debug/debug-application/debug-pods/">https://kubernetes.io/docs/tasks/debug/debug-application/debug-pods/</a></div>
+</div>
+<div id="ref-KindLoad" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[83] </div><div class="csl-right-inline">The Kubernetes Authors, <span>“Kind quick start.”</span> 2026. Available: <a href="https://kind.sigs.k8s.io/docs/user/quick-start/">https://kind.sigs.k8s.io/docs/user/quick-start/</a></div>
+</div>
+<div id="ref-K8sKubeconfig" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[84] </div><div class="csl-right-inline">The Kubernetes Authors, <span>“Organizing cluster access using kubeconfig files.”</span> 2026. Available: <a href="https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/">https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/</a></div>
+</div>
+<div id="ref-OCIFreeTier" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[85] </div><div class="csl-right-inline">Oracle, <span>“Always free resources.”</span> 2026. Available: <a href="https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm">https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm</a></div>
+</div>
+<div id="ref-OracleFreeTier" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[86] </div><div class="csl-right-inline">Oracle, <span>“Oracle cloud free tier.”</span> 2026. Available: <a href="https://www.oracle.com/cloud/free/">https://www.oracle.com/cloud/free/</a></div>
+</div>
+<div id="ref-OCIErrors" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[87] </div><div class="csl-right-inline">Oracle, <span>“<span>API</span> errors.”</span> 2026. Available: <a href="https://docs.oracle.com/en-us/iaas/Content/API/References/apierrors.htm">https://docs.oracle.com/en-us/iaas/Content/API/References/apierrors.htm</a></div>
+</div>
+<div id="ref-OCIProvider" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[88] </div><div class="csl-right-inline">Oracle, <span>“<span>Terraform</span> provider for oracle cloud infrastructure.”</span> 2026. Available: <a href="https://docs.oracle.com/en-us/iaas/Content/dev/terraform/home.htm">https://docs.oracle.com/en-us/iaas/Content/dev/terraform/home.htm</a></div>
+</div>
+<div id="ref-CFToken" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[89] </div><div class="csl-right-inline">Cloudflare, <span>“Create <span>API</span> token.”</span> 2026. Available: <a href="https://developers.cloudflare.com/fundamentals/api/get-started/create-token/">https://developers.cloudflare.com/fundamentals/api/get-started/create-token/</a></div>
+</div>
+<div id="ref-CFProvider" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[90] </div><div class="csl-right-inline">Cloudflare, <span>“<span>Terraform</span> provider for cloudflare.”</span> 2026. Available: <a href="https://github.com/cloudflare/terraform-provider-cloudflare/blob/master/docs/index.md">https://github.com/cloudflare/terraform-provider-cloudflare/blob/master/docs/index.md</a></div>
+</div>
+<div id="ref-LERateLimits" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[91] </div><div class="csl-right-inline">Internet Security Research Group, <span>“Rate limits.”</span> 2026. Available: <a href="https://letsencrypt.org/docs/rate-limits/">https://letsencrypt.org/docs/rate-limits/</a></div>
+</div>
+<div id="ref-LEStaging" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[92] </div><div class="csl-right-inline">Internet Security Research Group, <span>“Staging environment.”</span> 2026. Available: <a href="https://letsencrypt.org/docs/staging-environment/">https://letsencrypt.org/docs/staging-environment/</a></div>
+</div>
+<div id="ref-LetsEncrypt" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[93] </div><div class="csl-right-inline">Internet Security Research Group, <span>“Let’s encrypt documentation.”</span> 2026. Available: <a href="https://letsencrypt.org/docs/">https://letsencrypt.org/docs/</a></div>
+</div>
+<div id="ref-ACMEProvider" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[94] </div><div class="csl-right-inline">C. Marchesi, <span>“<span>Terraform</span> provider for <span>ACME</span>: acme_certificate.”</span> 2026. Available: <a href="https://github.com/vancluever/terraform-provider-acme/blob/main/docs/resources/certificate.md">https://github.com/vancluever/terraform-provider-acme/blob/main/docs/resources/certificate.md</a></div>
+</div>
+<div id="ref-LEChallenges" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[95] </div><div class="csl-right-inline">Internet Security Research Group, <span>“Challenge types.”</span> 2026. Available: <a href="https://letsencrypt.org/docs/challenge-types/">https://letsencrypt.org/docs/challenge-types/</a></div>
+</div>
+<div id="ref-OCIAccess" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[96] </div><div class="csl-right-inline">Oracle, <span>“Connecting to your linux instance using <span>SSH</span>.”</span> 2026. Available: <a href="https://docs.oracle.com/en-us/iaas/Content/Compute/Tasks/accessinginstance.htm">https://docs.oracle.com/en-us/iaas/Content/Compute/Tasks/accessinginstance.htm</a></div>
+</div>
+<div id="ref-CloudInit" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[97] </div><div class="csl-right-inline">Canonical, <span>“Cloud-init documentation.”</span> 2026. Available: <a href="https://cloudinit.readthedocs.io/en/latest/">https://cloudinit.readthedocs.io/en/latest/</a></div>
+</div>
+</div>
+
+{% endraw %}

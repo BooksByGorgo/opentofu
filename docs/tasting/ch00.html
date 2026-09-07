@@ -1,0 +1,100 @@
+---
+layout: default
+title: "0. How to use this booklet"
+parent: "Gorgo Tasting OpenTofu and Terraform"
+nav_order: 0
+---
+
+{% raw %}
+<h1 data-number="0" id="how-to-use-this-booklet"><span class="header-section-number">0</span> How to use this booklet</h1>
+<p>This is a short booklet about describing infrastructure in files and letting a tool make the world match the files. The tool is OpenTofu, or Terraform, or both — for everything in this booklet they are the same thing. By the end you will have a web server that serves a saying of the second, backed by a database, running first on your machine, then on Kubernetes, and finally on the internet with a real name and a real certificate. All of it is created, changed, and torn down with one command.</p>
+<p>Each chapter is meant to help you understand a topic, but you will still want to reference the provider documentation for the specifics of every argument. Hopefully, you will have the context you need to read that documentation without your eyes glazing over.</p>
+<h2 data-number="0.1" id="opentofu-and-terraform"><span class="header-section-number">0.1</span> OpenTofu and Terraform</h2>
+<p>  Terraform was created by HashiCorp in 2014 and became the standard way to describe infrastructure as code. In 2023 HashiCorp changed its license to one that is no longer open source, and the community forked the last open source release as OpenTofu under the Linux Foundation. The two projects share the same language, the same providers, the same state file format, and the same commands. The differences are at the edges, and Appendix A lists the ones that matter.</p>
+<p>This booklet treats the two as equivalent. Commands are written as <code>tofu</code>; if you use Terraform, type <code>terraform</code> instead. Every configuration in this booklet works with both, and where one has a feature the other lacks, the booklet does not use it.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Wut:</strong> The top-level configuration block is called <code>terraform</code> even in OpenTofu. OpenTofu kept the name so that existing configurations keep working. When you see <code>terraform { ... }</code> in a file, read it as “settings for the tool”.</p>
+</div></div>
+<h2 data-number="0.2" id="callouts"><span class="header-section-number">0.2</span> Callouts</h2>
+<p><strong>Tips</strong> call out details that you need to pay special attention to. <strong>Traps</strong> warn you of common mistakes. <strong>Wut</strong> calls out a detail that is counter-intuitive, so make sure you pay attention.</p>
+<h2 data-number="0.3" id="what-you-need"><span class="header-section-number">0.3</span> What you need</h2>
+<ul>
+<li><strong>OpenTofu</strong> (or Terraform). On macOS, <code>brew install opentofu</code>. On Ubuntu, <code>snap install --classic opentofu</code>, or follow the installer instructions at <a href="https://opentofu.org/docs/intro/install/">opentofu.org</a>. On Windows, <code>winget install OpenTofu.Tofu</code>. Check with <code>tofu version</code>.</li>
+<li><strong>Docker</strong> running on your machine (Chapters 2 through 5): Docker Engine on Linux, Docker Desktop on macOS and Windows.</li>
+<li><strong>Go</strong> 1.21 or newer (Chapters 2 and 3, for running the server outside a container): the installers at <a href="https://go.dev/dl/">go.dev/dl</a> cover all three systems, or <code>brew install go</code> on macOS and <code>winget install GoLang.Go</code> on Windows. The examples declare Go 1.26 in <code>go.mod</code>, and any Go from 1.21 on fetches that toolchain for you the first time it is needed.</li>
+<li><strong>kind</strong> and <strong>kubectl</strong> (Chapter 4). On macOS, <code>brew install kind kubectl</code>. On Windows, <code>winget install Kubernetes.kind</code> and then <code>winget install Kubernetes.kubectl</code>. On Linux, the release binaries from the two projects’ sites.</li>
+<li>For Chapter 5, an <strong>Oracle Cloud</strong> free tier account, a domain whose DNS is hosted by <strong>Cloudflare</strong>, and an email address for <strong>Let’s Encrypt</strong>.</li>
+</ul>
+<h2 data-number="0.4" id="windows"><span class="header-section-number">0.4</span> Windows</h2>
+<p>The sessions in this booklet use a POSIX shell, which is what macOS and Linux give you. On Windows you have two good options.</p>
+<p>The simplest is <strong>WSL</strong> (Windows Subsystem for Linux): install Ubuntu from the Microsoft Store, install Docker Desktop with its WSL integration turned on, and then follow the Linux instructions inside the Ubuntu terminal. Everything in the booklet works there exactly as printed.</p>
+<p>The other is to stay in <strong>PowerShell</strong> with the native Windows tools, which works too, with a few translations:</p>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th style="text-align: left;">In the booklet</th>
+<th style="text-align: left;">In PowerShell</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>export NAME=value</code></td>
+<td style="text-align: left;"><code>$env:NAME = "value"</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>NAME=value tofu apply</code></td>
+<td style="text-align: left;"><code>$env:NAME = "value"; tofu apply</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>$(command)</code></td>
+<td style="text-align: left;">the same</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>curl</code></td>
+<td style="text-align: left;"><code>curl.exe</code> (plain <code>curl</code> is an alias for a different command)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>command &amp;</code> (run in the background)</td>
+<td style="text-align: left;">run it in a second terminal</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>~/.ssh/id_ed25519.pub</code>, <code>~/.kube/config</code></td>
+<td style="text-align: left;">the same; the tool expands <code>~</code> to your home directory</td>
+</tr>
+</tbody>
+</table>
+<p>OpenTofu itself, its language, and the providers behave the same on all three systems, and so do the configurations in this booklet.</p>
+<h2 data-number="0.5" id="reading-the-examples"><span class="header-section-number">0.5</span> Reading the examples</h2>
+<p>Configuration is shown in <code>terraform</code> code blocks:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;terraform_data&quot;</span> <span class="st">&quot;hello&quot;</span> {</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  input <span class="op">=</span> <span class="st">&quot;hello world&quot;</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p>Terminal sessions are shown in an outlined box. Lines that start with <code>$</code> are what you type, in bold; everything else is what the tool printed back:</p>
+<pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ tofu plan</b>
+Plan: 1 to add, 0 to change, 0 to destroy.</pre>
+<p>Output is trimmed to the interesting lines, and a line with only <code>...</code> stands for output that was left out. Your output will have more in it, and the ids and timings will differ.</p>
+<p>The complete, tested configurations for every chapter are in the <code>examples</code> directory next to this booklet, under the directory names the chapters use: <code>hello-world</code>, <code>webserver</code>, <code>database</code>, <code>kubernetes</code>, <code>oracle</code>, the shared <code>modules</code>, and <code>motd</code>, the sayings module that Chapters 3 to 5 pull from GitHub. Each one is self-contained, so you can <code>cd</code> into it and run <code>tofu init</code> and <code>tofu apply</code> without copying anything else.</p>
+<h2 data-number="0.6" id="chapter-layout"><span class="header-section-number">0.6</span> Chapter layout</h2>
+<p>Each chapter follows a consistent structure:</p>
+<ul>
+<li><strong>The need, why it matters, why it is hard, and the strategy</strong> at the top, so you know what problem the chapter solves before it starts solving it.</li>
+<li>The <strong>main content</strong> with explanations, configuration, commands, and callouts.</li>
+<li><strong>Key Points</strong> summarizing the concepts that were introduced.</li>
+<li><strong>New Syntax</strong> collecting the language elements the chapter introduced in one table.</li>
+<li><strong>Try It</strong> suggestions of things to change, break, and extend.</li>
+<li><strong>Exercises</strong> with a mix of questions to test your understanding.</li>
+</ul>
+<p>New syntax is introduced when a chapter needs it, with an attempt to explain why it exists and how to think about it, not just what it is.</p>
+<h2 data-number="0.7" id="appendices"><span class="header-section-number">0.7</span> Appendices</h2>
+<p>Appendix A collects best practices, recommendations, and common errors for OpenTofu and Terraform in one place. Skim it once now so that you know it exists, and read it properly after Chapter 3, when the advice will make sense. The chapters point to it when they run into one of its items.</p>
+<p>Appendix B lists what the tool provides without any provider: the built-in resource and data source, the block types, the meta-arguments, the named values, the operators, and the commonly used built-in functions with an example of each. Keep it open while you write configuration.</p>
+<h2 data-number="0.8" id="exercises"><span class="header-section-number">0.8</span> Exercises</h2>
+<p>Do not skip the exercises at the end of the chapters. You can get the answer key, but do not look at it before you work out the answer yourself. If you peek first, the concepts will not sink in. And most of all, run the examples. Infrastructure as code is learned by applying, breaking, and destroying things, and there is no other way that comes close to it.</p>
+
+{% endraw %}

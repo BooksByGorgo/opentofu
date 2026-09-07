@@ -1,0 +1,251 @@
+---
+layout: default
+title: "Answer Key"
+parent: "Gorgo Tasting OpenTofu and Terraform"
+nav_order: 200
+---
+
+{% raw %}
+<h1 id="hello-world">1. Hello, World</h1>
+<p><strong>1. Think about it:</strong> <code>tofu apply</code> prints hello world the first time and nothing the second time. Explain what the tool compared to decide there was nothing to do, and where each side of the comparison came from.</p>
+<p><strong>Answer:</strong> It compared the desired state with the recorded state. The desired state comes from the configuration files: one <code>terraform_data.hello</code> should exist. The recorded state comes from <code>terraform.tfstate</code>, written by the first apply: a <code>terraform_data.hello</code> exists with a given id. The two agree, so the plan is empty and no provisioner runs. For resources backed by a provider, the tool also refreshes the recorded state against reality before comparing, which is how it notices things deleted behind its back.</p>
+<hr />
+<p><strong>2. What does this do?</strong> Given this configuration and a fresh directory, what does <code>tofu apply -auto-approve</code> print, in order?</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;terraform_data&quot;</span> <span class="st">&quot;first&quot;</span> {</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">provisioner</span> <span class="st">&quot;local-exec&quot;</span> {</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    command <span class="op">=</span> <span class="st">&quot;echo one&quot;</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;terraform_data&quot;</span> <span class="st">&quot;second&quot;</span> {</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  input <span class="op">=</span> terraform_data.first.id</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>  <span class="kw">provisioner</span> <span class="st">&quot;local-exec&quot;</span> {</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>    command <span class="op">=</span> <span class="st">&quot;echo two&quot;</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p><strong>Answer:</strong> <code>one</code>, then <code>two</code>. <code>second</code> references <code>terraform_data.first.id</code>, so <code>first</code> must be created before <code>second</code>, and each provisioner runs when its resource is created. Without the reference, the two could be created in either order or at the same time.</p>
+<hr />
+<p><strong>3. Calculation:</strong> A configuration has three <code>terraform_data</code> resources, each with <code>triggers_replace = [var.tag]</code>, and the state was applied with <code>tag = "a"</code>. What is the plan summary line for <code>tofu plan -var tag=b</code>?</p>
+<p><strong>Answer:</strong> <code>Plan: 3 to add, 0 to change, 3 to destroy.</code> Every resource’s trigger changed, so each one is destroyed and recreated, which counts as one destroy and one add.</p>
+<hr />
+<p><strong>4. Where is the bug?</strong></p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">variable</span> <span class="st">&quot;name&quot;</span> {</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  type    <span class="op">=</span> <span class="dt">string</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  default <span class="op">=</span> <span class="st">&quot;gorgo&quot;</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;terraform_data&quot;</span> <span class="st">&quot;greet&quot;</span> {</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>  <span class="kw">provisioner</span> <span class="st">&quot;local-exec&quot;</span> {</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>    command <span class="op">=</span> <span class="st">&quot;echo hello var.name&quot;</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p><strong>Answer:</strong> The command prints <code>hello var.name</code>. Inside a string, a reference has to be interpolated: <code>"echo hello ${var.name}"</code>. Without the <code>${...}</code>, <code>var.name</code> is just text.</p>
+<hr />
+<p><strong>5. Write a configuration</strong> with a variable <code>path</code> that must end in <code>.txt</code> (use <code>endswith</code>), and a resource that writes the current date into that file with <code>date &gt; path</code>. Make sure a second apply does not rewrite the file, and that changing <code>path</code> does.</p>
+<p><strong>Answer:</strong></p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">variable</span> <span class="st">&quot;path&quot;</span> {</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>  type <span class="op">=</span> <span class="dt">string</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>  validation {</span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    condition     <span class="op">=</span> endswith(<span class="va">var</span>.path, <span class="st">&quot;.txt&quot;</span>)</span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    error_message <span class="op">=</span> <span class="st">&quot;path must end in .txt.&quot;</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;terraform_data&quot;</span> <span class="st">&quot;stamp&quot;</span> {</span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>  triggers_replace <span class="op">=</span> [<span class="va">var</span>.path]</span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>  <span class="kw">provisioner</span> <span class="st">&quot;local-exec&quot;</span> {</span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>    command <span class="op">=</span> <span class="st">&quot;date &gt; &#39;</span><span class="ss">${</span><span class="va">var.path</span><span class="ss">}</span><span class="st">&#39;&quot;</span></span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p>The second apply finds the resource already in state and does nothing. Changing <code>path</code> changes <code>triggers_replace</code>, so the resource is replaced and the provisioner writes the new file. The old file is not removed; a <code>provisioner "local-exec" { when = destroy ... }</code> could do that.</p>
+<h1 id="a-web-server-on-your-machine">2. A Web Server on Your Machine</h1>
+<p><strong>1. Think about it:</strong> The image resource has a <code>triggers</code> map holding a hash of the source directory. What would happen on the second <code>apply</code> if the hash were replaced with <code>timestamp()</code>? What would happen if <code>triggers</code> were removed entirely and you edited <code>main.go</code>?</p>
+<p><strong>Answer:</strong> With <code>timestamp()</code> the trigger value changes on every plan, so every apply rebuilds the image and replaces the container, even when nothing changed. That is the “provisioner on every run” anti-pattern in a different coat. Without <code>triggers</code>, editing <code>main.go</code> changes nothing the tool can see: the image name is still <code>motd:ch2</code>, so the plan is empty and the old server keeps running.</p>
+<hr />
+<p><strong>2. What does this do?</strong> For the expression below, what is the type of the result and how many elements does it have when <code>app/</code> contains <code>main.go</code>, <code>go.mod</code>, and <code>Dockerfile</code>?</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>[<span class="cf">for</span> f <span class="cf">in</span> <span class="bu">fileset</span>(<span class="st">&quot;app&quot;</span>, <span class="st">&quot;*.go&quot;</span>) : <span class="bu">upper</span>(f)]</span></code></pre></div>
+<p><strong>Answer:</strong> A list of strings with one element, <code>["MAIN.GO"]</code>. <code>fileset</code> matches only <code>main.go</code> against <code>*.go</code>, and the for expression applies <code>upper</code> to each match. Since the input is a set, the result is a list built in lexical order of the set’s elements.</p>
+<hr />
+<p><strong>3. Calculation:</strong> A configuration pins <code>version = "~&gt; 3.4"</code> for a provider whose available releases are 3.3.0, 3.4.2, 3.9.0, and 4.0.1. Which release does <code>tofu init</code> install, and which is the newest it could ever install without editing the constraint?</p>
+<p><strong>Answer:</strong> <code>~&gt; 3.4</code> means <code>&gt;= 3.4, &lt; 4.0</code>. <code>init</code> installs the newest that fits, 3.9.0. The newest it could ever install is the last 3.x release; 4.0.1 is excluded. Once the lock file exists, <code>init</code> keeps 3.9.0 until you run <code>init -upgrade</code>.</p>
+<hr />
+<p><strong>4. Where is the bug?</strong></p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;docker_container&quot;</span> <span class="st">&quot;web&quot;</span> {</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  name  <span class="op">=</span> <span class="st">&quot;motd&quot;</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>  image <span class="op">=</span> docker_image.web.name</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>  ports {</span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>    internal <span class="op">=</span> <span class="dv">8080</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>    external <span class="op">=</span> <span class="va">var</span>.port</span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p><strong>Answer:</strong> <code>image</code> refers to the image’s <code>name</code>, which is the fixed string <code>motd:ch2</code>. The container works the first time, but when the source changes and the image is rebuilt, the name is the same, so the container is not replaced and keeps running the old binary. Use <code>docker_image.web.image_id</code>, which changes with every build.</p>
+<hr />
+<p><strong>5. Where is the bug?</strong></p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="kw">locals</span> {</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>  app_dir <span class="op">=</span> <span class="st">&quot;</span><span class="ss">${</span><span class="va">path.module</span><span class="ss">}</span><span class="st">/app&quot;</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;docker_image&quot;</span> <span class="st">&quot;web&quot;</span> {</span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>  name <span class="op">=</span> <span class="st">&quot;motd:ch2&quot;</span></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>  build {</span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>    context <span class="op">=</span> <span class="kw">locals</span>.app_dir</span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p><strong>Answer:</strong> The block is <code>locals</code> (plural) but the reference is <code>local.app_dir</code> (singular). <code>locals.app_dir</code> is a reference to an undeclared resource named <code>locals</code>, and <code>tofu validate</code> says so.</p>
+<hr />
+<p><strong>6. Write a configuration</strong> that runs two copies of the web server on ports 8080 and 8081 from the same image, with a check for each. Then reduce the duplication with a variable of type <code>list(number)</code> and <code>count</code> (look it up), and compare the plans.</p>
+<p><strong>Answer:</strong> The duplicated version has two <code>docker_container</code> blocks, <code>web_a</code> and <code>web_b</code>, differing only in <code>name</code> and <code>external</code>, and two <code>check</code> blocks. The <code>count</code> version:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">variable</span> <span class="st">&quot;ports&quot;</span> {</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  type    <span class="op">=</span> <span class="dt">list</span>(<span class="dt">number</span>)</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>  default <span class="op">=</span> [<span class="dv">8080</span>, <span class="dv">8081</span>]</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;docker_container&quot;</span> <span class="st">&quot;web&quot;</span> {</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">count</span> <span class="op">=</span> <span class="bu">length</span>(<span class="va">var</span>.ports)</span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>  name  <span class="op">=</span> <span class="st">&quot;motd-</span><span class="ss">${</span><span class="va">count.index</span><span class="ss">}</span><span class="st">&quot;</span></span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>  image <span class="op">=</span> docker_image.web.image_id</span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>  ports {</span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a>    internal <span class="op">=</span> <span class="dv">8080</span></span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>    external <span class="op">=</span> <span class="va">var</span>.ports[<span class="at">count</span>.<span class="bu">index</span>]</span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p>The instances are addressed <code>docker_container.web[0]</code> and <code>docker_container.web[1]</code>. The plans create the same containers; the difference shows up when you remove the first port: with <code>count</code>, the container at index 0 is replaced to take the other port and the one at index 1 is destroyed, instead of one container simply going away, which is the reason <code>for_each</code> (Chapter 5) is usually preferred. A <code>check</code> block cannot use <code>count</code>, so the check either loops in one assertion with <code>alltrue([for c in docker_container.web : ...])</code> or a data source with <code>for_each</code>.</p>
+<h1 id="a-database-of-sayings">3. A Database of Sayings</h1>
+<p><strong>1. Think about it:</strong> The database container has <code>wait = true</code> and the web container has <code>depends_on = [docker_container.db]</code>. What would go wrong if you removed only <code>wait</code>? What if you removed only <code>depends_on</code>?</p>
+<p><strong>Answer:</strong> Without <code>wait</code>, the database counts as created the moment the container starts, so the web server starts while MySQL is still loading the seed. The server itself copes (it answers 503 until the database answers), but the <code>check</code> may run before the seed is loaded and warn. Without <code>depends_on</code>, nothing orders the web container after the database at all; they start together, with the same result, and on a destroy the database may be removed before the web server, which does not matter here but would for anything that needed to flush.</p>
+<hr />
+<p><strong>2. What does this do?</strong> What does the template below produce for <code>names = ["a", "b", "c"]</code>?</p>
+<pre><code>%{ for i, n in names ~}
+${i}:${n}${i &lt; length(names) - 1 ? &quot;,&quot; : &quot;&quot;}
+%{ endfor ~}</code></pre>
+<p><strong>Answer:</strong></p>
+<pre><code>0:a,
+1:b,
+2:c</code></pre>
+<p>Each iteration emits the index, a colon, the name, and a comma except on the last; the <code>~</code> on the directives eats the newlines after them, so the output has exactly one line per name.</p>
+<hr />
+<p><strong>3. Calculation:</strong> At 14:05:09 local time, which saying does the server return, as a prefix index and a suffix index? Which second of which minute returns <code>local.sayings[3599]</code>?</p>
+<p><strong>Answer:</strong> The key is <code>5 * 60 + 9 = 309</code>, which is prefix <code>309 / 60 = 5</code> and suffix <code>309 % 60 = 9</code>: “A careful reviewer asks why before asking how.” Key 3599 is minute 59, second 59: <code>59 * 60 + 59</code>.</p>
+<hr />
+<p><strong>4. Where is the bug?</strong></p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;docker_container&quot;</span> <span class="st">&quot;db&quot;</span> {</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>  name  <span class="op">=</span> <span class="st">&quot;motd-db&quot;</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>  image <span class="op">=</span> docker_image.mysql.image_id</span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>  volumes {</span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>    host_path      <span class="op">=</span> <span class="st">&quot;./seed&quot;</span></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>    container_path <span class="op">=</span> <span class="st">&quot;/docker-entrypoint-initdb.d&quot;</span></span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p><strong>Answer:</strong> Docker requires an absolute host path for a bind mount, and <code>./seed</code> is relative. Use <code>abspath("${path.module}/seed")</code>. There is also no dependency on whatever writes the seed, so the container could start before the file exists; referencing <code>local_file.seed.filename</code> fixes both.</p>
+<hr />
+<p><strong>5. Where is the bug?</strong></p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="kw">output</span> <span class="st">&quot;dsn&quot;</span> {</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>  value <span class="op">=</span> <span class="st">&quot;motd:</span><span class="ss">${</span><span class="va">random_password.db.result</span><span class="ss">}</span><span class="st">@tcp(db:3306)/motd&quot;</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p><strong>Answer:</strong> The value contains a sensitive value, and an output that does is required to be marked <code>sensitive = true</code>; the plan fails with <code>Output refers to sensitive values</code>. Add the marking, and think about whether an output that contains a password should exist at all.</p>
+<hr />
+<p><strong>6. Write a configuration</strong> that adds a second table, <code>visits</code>, seeded from a template with one row per weekday, and a second <code>check</code> that queries the database through <code>docker exec</code> in a <code>terraform_data</code> provisioner. Decide whether the provisioner or an <code>http</code> data source is the better tool, and say why.</p>
+<p><strong>Answer:</strong> The seed is a second <code>local_file</code>, <code>seed/002-visits.sql</code>, rendered from a template over <code>["Monday", ..., "Friday"]</code>, in the same directory so MySQL runs it after <code>001-sayings.sql</code>. The query can be a <code>terraform_data</code> with <code>triggers_replace = [docker_container.db.id]</code> and a <code>local-exec</code> running <code>docker exec motd-db mysql -umotd -p... motd -e 'SELECT COUNT(*) FROM visits'</code>. That works but is the wrong tool: a provisioner runs only at creation, its result is not in the state, and a failure taints the resource. A <code>check</code> block can only hold data sources, and there is no data source that runs SQL through docker; the better design is to expose <code>/healthz</code> on the web server that runs the query, and check that with <code>data "http"</code>. Checks should test through the application’s own interface anyway.</p>
+<h1 id="kubernetes">4. Kubernetes</h1>
+<p><strong>1. Think about it:</strong> The image tag is derived from the source hash instead of using <code>motd:latest</code> with <code>image_pull_policy = "Always"</code>. Give two things that would go wrong with the <code>latest</code> approach in this configuration.</p>
+<p><strong>Answer:</strong> First, the deployment’s <code>image</code> argument never changes, so the plan is empty after a rebuild and Kubernetes has no reason to roll out anything; you would have to delete pods by hand. Second, <code>Always</code> makes the cluster pull on every pod start, and kind has no registry to pull from, so pods fail with <code>ImagePullBackOff</code> even though the image was loaded. A third: with <code>latest</code> there is no way to tell from <code>kubectl get pods</code> which source is running.</p>
+<hr />
+<p><strong>2. What does this do?</strong> How many <code>ports</code> blocks does this produce when <code>var.ports = [80, 443]</code>, and what does <code>ports.value</code> refer to in each?</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="kw">dynamic</span> <span class="st">&quot;ports&quot;</span> {</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">for_each</span> <span class="op">=</span> <span class="va">var</span>.ports</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>  <span class="kw">content</span> {</span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>    internal <span class="op">=</span> ports.value</span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>    external <span class="op">=</span> ports.value</span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p><strong>Answer:</strong> Two <code>ports</code> blocks. In the first, <code>ports.value</code> is <code>80</code>; in the second, <code>443</code>. The iterator is named after the block (<code>ports</code>) unless an <code>iterator</code> argument renames it.</p>
+<hr />
+<p><strong>3. Calculation:</strong> The web deployment has <code>replicas = 2</code>, and each pod’s readiness probe runs every 5 seconds. Roughly how long after the database becomes ready can the deployment be reported created, at the earliest? What in the configuration bounds the worst case?</p>
+<p><strong>Answer:</strong> At the earliest, one probe period after the database answers, about five seconds, since both pods probe independently and can pass on the same cycle. In practice add the initial delay and a probe or two, so ten to fifteen seconds. The worst case is bounded by <code>timeouts { create = "5m" }</code> on the deployment, after which apply fails.</p>
+<hr />
+<p><strong>4. Where is the bug?</strong></p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="kw">module</span> <span class="st">&quot;motd&quot;</span> {</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">source</span>      <span class="op">=</span> <span class="st">&quot;../modules/motd-k8s&quot;</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>  image       <span class="op">=</span> docker_image.web.name</span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>  db_password <span class="op">=</span> random_password.db.result</span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>  node_port   <span class="op">=</span> <span class="dv">30080</span></span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p><strong>Answer:</strong> <code>seed_sql</code> has no default in the module and is not given, so <code>validate</code> fails with <code>Missing required argument</code>. The missing <code>depends_on = [terraform_data.kind_load]</code> is a second, quieter bug: the pods may start before the image is loaded into the cluster, and the rollout waits on <code>ImagePullBackOff</code> until it times out.</p>
+<hr />
+<p><strong>5. Where is the bug?</strong></p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>env {</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>  name  <span class="op">=</span> <span class="st">&quot;DB_DSN&quot;</span></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>  value <span class="op">=</span> <span class="st">&quot;motd:</span><span class="ss">${</span><span class="va">DB_PASSWORD</span><span class="ss">}</span><span class="st">@tcp(db:3306)/motd&quot;</span></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p><strong>Answer:</strong> <code>${DB_PASSWORD}</code> is an OpenTofu interpolation, and there is no <code>DB_PASSWORD</code> in the configuration, so validation fails with a reference to an undeclared resource. The Kubernetes expansion syntax uses parentheses: <code>$(DB_PASSWORD)</code>, which the configuration language passes through untouched.</p>
+<hr />
+<p><strong>6. Write a module</strong> around <code>kubernetes_resource_quota_v1</code>: name it <code>namespace-quota</code>, give it a namespace name and a maximum number of pods as variables, and have it create the namespace with that quota. Call it from the root for two namespaces and confirm <code>kubectl describe quota</code> in each.</p>
+<p><strong>Answer:</strong></p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="kw">variable</span> <span class="st">&quot;name&quot;</span> { type <span class="op">=</span> <span class="dt">string</span> }</span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a><span class="kw">variable</span> <span class="st">&quot;max_pods&quot;</span> { type <span class="op">=</span> <span class="dt">number</span> }</span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;kubernetes_namespace_v1&quot;</span> <span class="st">&quot;this&quot;</span> {</span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>  metadata {</span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>    name <span class="op">=</span> <span class="va">var</span>.name</span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;kubernetes_resource_quota_v1&quot;</span> <span class="st">&quot;pods&quot;</span> {</span>
+<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a>  metadata {</span>
+<span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a>    name      <span class="op">=</span> <span class="st">&quot;pods&quot;</span></span>
+<span id="cb15-13"><a href="#cb15-13" aria-hidden="true" tabindex="-1"></a>    namespace <span class="op">=</span> kubernetes_namespace_v1.this.metadata[<span class="dv">0</span>].name</span>
+<span id="cb15-14"><a href="#cb15-14" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb15-15"><a href="#cb15-15" aria-hidden="true" tabindex="-1"></a>  spec {</span>
+<span id="cb15-16"><a href="#cb15-16" aria-hidden="true" tabindex="-1"></a>    hard <span class="op">=</span> {</span>
+<span id="cb15-17"><a href="#cb15-17" aria-hidden="true" tabindex="-1"></a>      pods <span class="op">=</span> <span class="va">var</span>.max_pods</span>
+<span id="cb15-18"><a href="#cb15-18" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb15-19"><a href="#cb15-19" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb15-20"><a href="#cb15-20" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p>The root calls it twice:</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="kw">module</span> <span class="st">&quot;team_a&quot;</span> {</span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">source</span>   <span class="op">=</span> <span class="st">&quot;./namespace-quota&quot;</span></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>  name     <span class="op">=</span> <span class="st">&quot;team-a&quot;</span></span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>  max_pods <span class="op">=</span> <span class="dv">5</span></span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a><span class="kw">module</span> <span class="st">&quot;team_b&quot;</span> {</span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>  <span class="kw">source</span>   <span class="op">=</span> <span class="st">&quot;./namespace-quota&quot;</span></span>
+<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a>  name     <span class="op">=</span> <span class="st">&quot;team-b&quot;</span></span>
+<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a>  max_pods <span class="op">=</span> <span class="dv">10</span></span>
+<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p><code>kubectl describe quota -n team-a</code> shows <code>pods 0 5</code>. With <code>for_each = { team-a = 5, team-b = 10 }</code> on a single <code>module</code> block, the two calls collapse into one with <code>each.key</code> and <code>each.value</code>.</p>
+<h1 id="on-the-internet">5. On the Internet</h1>
+<p><strong>1. Think about it:</strong> Stage two reads stage one’s outputs through remote state. Why not put everything in one configuration, with the Docker provider’s <code>host</code> built from <code>oci_core_instance.motd.public_ip</code> by interpolation?</p>
+<p><strong>Answer:</strong> The provider’s configuration must be known and usable at plan time, and on the first run the instance does not exist, so the host is <code>(known after apply)</code> and the provider cannot connect to plan the containers. Even after the first apply, replacing the instance would put the provider in the same position. Separate configurations also separate the lifecycles: the application is applied many times a day, the machine and the certificate rarely, and a mistake in one cannot destroy the other.</p>
+<hr />
+<p><strong>2. What does this do?</strong> With <code>hostnames = ["motd", "www"]</code> and <code>domain = "example.com"</code>, what are the addresses of the DNS record instances, and what are <code>common_name</code> and <code>subject_alternative_names</code> on the certificate?</p>
+<p><strong>Answer:</strong> <code>local.fqdns</code> is <code>["motd.example.com", "www.example.com"]</code>. The records are <code>cloudflare_dns_record.motd["motd.example.com"]</code> and <code>cloudflare_dns_record.motd["www.example.com"]</code>. The certificate has <code>common_name = "motd.example.com"</code> and <code>subject_alternative_names = ["www.example.com"]</code>, from <code>slice(local.fqdns, 1, 2)</code>.</p>
+<hr />
+<p><strong>3. Calculation:</strong> A certificate was issued on March 1st with <code>min_days_remaining = 30</code>. On which day does <code>tofu plan</code> first show it being replaced, and if you apply only on the first of each month, how many days of validity does the old certificate have left on the day it is replaced?</p>
+<p><strong>Answer:</strong> Let’s Encrypt certificates last 90 days, so it expires on May 30th. Thirty days or fewer remain from April 30th, and the provider renews at thirty, so a plan on April 30th first shows the replacement (a plan on April 29th sees 31 days). Applying on the first of each month, April 1st is too early (59 days left) and May 1st does it, with 29 days left on the old certificate.</p>
+<hr />
+<p><strong>4. Where is the bug?</strong></p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;cloudflare_dns_record&quot;</span> <span class="st">&quot;motd&quot;</span> {</span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">for_each</span> <span class="op">=</span> <span class="va">local</span>.fqdns</span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>  zone_id <span class="op">=</span> <span class="va">var</span>.cloudflare_zone_id</span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>  name    <span class="op">=</span> <span class="va">each</span>.value</span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>  type    <span class="op">=</span> <span class="st">&quot;A&quot;</span></span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a>  <span class="kw">content</span> <span class="op">=</span> oci_core_instance.motd.public_ip</span>
+<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a>  ttl     <span class="op">=</span> <span class="dv">60</span></span>
+<span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p><strong>Answer:</strong> <code>local.fqdns</code> is a list, and <code>for_each</code> accepts only a set of strings or a map; the error is <code>The given "for_each" argument value is unsuitable</code>. Wrap it: <code>for_each = toset(local.fqdns)</code>. A list would also be a poor choice even if it were allowed, because the instances would be keyed by position.</p>
+<hr />
+<p><strong>5. Where is the bug?</strong> The machine is up, the security list opens 443, DNS resolves, Caddy is running, and <code>curl https://motd.example.com/</code> times out.</p>
+<p><strong>Answer:</strong> A timeout, rather than a refusal or a TLS error, means packets are being dropped, and the usual culprit is the firewall inside the machine. Oracle’s Ubuntu image rejects everything but port 22 with <code>iptables</code>, so cloud-init must insert the accept rules for 80 and 443 and save them. Check with <code>sudo iptables -L INPUT -n --line-numbers</code> on the machine; if the rules are missing, cloud-init did not run the <code>runcmd</code> section, and <code>/var/log/cloud-init-output.log</code> says why.</p>
+<hr />
+<p><strong>6. Write a configuration</strong> for a second, staging machine in the same VCN with its own name (<code>motd-staging.example.com</code>), sharing the subnet and security list, by turning the instance, the record, and the certificate into a module called twice. Decide what the module’s variables should be before you write it.</p>
+<p><strong>Answer:</strong> The module needs what differs between the two machines and what they share but cannot look up: <code>name</code> (used for the display name and the host label), <code>hostnames</code>, <code>domain</code>, <code>zone_id</code>, <code>subnet_id</code>, <code>availability_domain</code>, <code>image_id</code>, <code>compartment_ocid</code>, <code>ssh_public_key</code>, <code>acme_email</code>, and the <code>account_key_pem</code> of one shared ACME registration. The module holds the <code>oci_core_instance</code>, the <code>cloudflare_dns_record</code> with <code>for_each</code>, and the <code>acme_certificate</code>, and outputs the public IP, the fully qualified name, and the certificate parts. The root keeps the VCN, subnet, gateway, route table, security list, the data sources, and one <code>acme_registration</code>, and calls the module as <code>module "prod"</code> and <code>module "staging"</code> with different <code>name</code> and <code>hostnames</code>. Stage two then reads <code>module.prod</code> or <code>module.staging</code> outputs from the root’s outputs, which is a hint that stage two should take a variable naming the environment.</p>
+
+{% endraw %}

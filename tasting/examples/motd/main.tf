@@ -1,6 +1,6 @@
 # A data-only module: no variables, no resources, four outputs.
 # Any configuration can pull it straight from this public repository with
-#   source = "github.com/BooksByGorgo/opentofu//examples/motd?ref=main"
+#   source = "github.com/BooksByGorgo/opentofu//tasting/examples/motd?ref=main"
 # 60 prefixes x 60 suffixes = 3600 sayings, one for every second of the hour.
 # Saying number n pairs prefix n / 60 with suffix n % 60.
 

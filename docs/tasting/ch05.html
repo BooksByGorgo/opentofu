@@ -1,0 +1,543 @@
+---
+layout: default
+title: "5. On the Internet"
+parent: "Gorgo Tasting OpenTofu and Terraform"
+nav_order: 5
+---
+
+{% raw %}
+<h1 data-number="5" id="on-the-internet"><span class="header-section-number">5</span> On the Internet</h1>
+<p><strong>The need.</strong> When a system spans several vendors and several lifecycles, one configuration is no longer the correct unit. Infrastructure that changes rarely and an application that changes daily should be applied separately, with a way to pass values from one to the other. Values that should not be hard-coded, like the newest machine image, have to be looked up. Repeated resources need to be generated from a set rather than written out, and a configuration that reaches across a machine boundary has to be clear about where paths, commands, and secrets end up.</p>
+<p><strong>Why it matters.</strong> Separate root modules with remote state are how real projects limit the blast radius of a mistake and let people work in parallel. Data sources and <code>for_each</code> are what keep a configuration correct as images are retired and lists grow. Knowing where a provider acts, and what loses its sensitivity on the way, is the difference between a secret and a leak.</p>
+<p><strong>Why it is hard.</strong> A provider must be able to reach its target during plan, so anything the provider needs has to exist before the configuration that uses it, which forces the split. Cloud networks are many small resources that must agree, some of which already exist and have to be taken over rather than created. Credentials for three vendors have to stay out of the files, certificates expire, and destroying things in the wrong order strands a state.</p>
+<p><strong>The strategy.</strong> Two root modules: infra creates the machine, the DNS records, and the certificate; app reads infra’s outputs through <code>terraform_remote_state</code> and deploys the Chapter 3 configuration as a module over SSH. Data sources find the image, <code>for_each</code> and <code>dynamic</code> generate the records and the firewall rules, a heredoc holds the proxy configuration, and <code>sensitive()</code> protects what crosses between states. The example is the sayings server on an Oracle Cloud free tier machine, named through Cloudflare DNS and served over HTTPS with a Let’s Encrypt certificate.</p>
+<h2 data-number="5.1" id="the-providers"><span class="header-section-number">5.1</span> The providers</h2>
+<p>    This chapter’s two configurations live in <code>oracle/infra</code> and <code>oracle/app</code>, next to <code>modules</code>. Stage one, in <code>infra</code>, uses four providers, all new; stage two, in <code>app</code>, reuses Docker, random, and HTTP from Chapter 3. <code>oracle/infra/versions.tf</code>:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">terraform</span> {</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">required_version</span> <span class="op">=</span> <span class="st">&quot;&gt;= 1.6&quot;</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  <span class="kw">required_providers</span> {</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    oci <span class="op">=</span> {</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>      <span class="kw">source</span>  <span class="op">=</span> <span class="st">&quot;oracle/oci&quot;</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>      version <span class="op">=</span> <span class="st">&quot;~&gt; 7.0&quot;</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    cloudflare <span class="op">=</span> {</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>      <span class="kw">source</span>  <span class="op">=</span> <span class="st">&quot;cloudflare/cloudflare&quot;</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>      version <span class="op">=</span> <span class="st">&quot;~&gt; 5.0&quot;</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>    acme <span class="op">=</span> {</span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>      <span class="kw">source</span>  <span class="op">=</span> <span class="st">&quot;vancluever/acme&quot;</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>      version <span class="op">=</span> <span class="st">&quot;~&gt; 2.0&quot;</span></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>    tls <span class="op">=</span> {</span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>      <span class="kw">source</span>  <span class="op">=</span> <span class="st">&quot;hashicorp/tls&quot;</span></span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>      version <span class="op">=</span> <span class="st">&quot;~&gt; 4.0&quot;</span></span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a><span class="kw">provider</span> <span class="st">&quot;oci&quot;</span> {</span>
+<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a>  <span class="co"># reads ~/.oci/config, written by `oci setup config`</span></span>
+<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a><span class="kw">provider</span> <span class="st">&quot;cloudflare&quot;</span> {</span>
+<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a>  <span class="co"># reads CLOUDFLARE_API_TOKEN</span></span>
+<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a><span class="kw">provider</span> <span class="st">&quot;acme&quot;</span> {</span>
+<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a>  server_url <span class="op">=</span> <span class="va">var</span>.acme_server</span>
+<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p>The <strong>OCI</strong> provider manages Oracle Cloud: networks, subnets, gateways, machines, and hundreds of other resource types, all prefixed <code>oci_</code>, plus data sources for looking things up, such as which machine images exist <span class="citation" data-cites="OCIProvider">[1]</span>. It authenticates with the same <code>~/.oci/config</code> file that Oracle’s own command line tool writes and reads. The <strong>Cloudflare</strong> provider manages DNS zones and records, among much else, through Cloudflare’s API and an API token <span class="citation" data-cites="CFProvider">[2]</span>. The <strong>ACME</strong> provider speaks the protocol Let’s Encrypt uses to issue certificates: <code>acme_registration</code> creates an account and <code>acme_certificate</code> requests a certificate, proving control of the name through a DNS record that the provider creates and removes for you <span class="citation" data-cites="ACMEProviderDocs">[3]</span>. The <strong>TLS</strong> provider generates keys and certificates locally, the way <code>random</code> generates strings; this chapter uses <code>tls_private_key</code> for the ACME account key <span class="citation" data-cites="TLSProviderDocs">[4]</span>.</p>
+<h2 data-number="5.2" id="new-syntax-in-this-chapter"><span class="header-section-number">5.2</span> New syntax in this chapter</h2>
+<p>   Five language features appear here for the first time or in a new role. Each is explained where it is used; this is the map.</p>
+<ul>
+<li><strong>Data sources</strong>, the <code>data</code> blocks from Chapter 2’s check, now do lookups: which availability domains the region has and which machine image is newest, values you should never hard-code.</li>
+<li><strong><code>for_each</code></strong> on a resource creates one instance per element of a set or map, with <code>each.key</code> and <code>each.value</code> available inside and an address like <code>RESOURCE["key"]</code> for each instance; the DNS records use it.</li>
+<li><strong><code>dynamic</code> over a map</strong> is the Chapter 4 block generator fed a map instead of a list, so that each generated block sees <code>.key</code> and <code>.value</code>; the firewall rules use it.</li>
+<li><strong>Heredocs</strong> (<code>&lt;&lt;-EOT ... EOT</code>) hold multi-line strings with interpolation, and the <code>-</code> strips the common indentation; the proxy configuration is one.</li>
+<li><strong><code>terraform_remote_state</code></strong>, a built-in data source, reads another configuration’s outputs, and <strong><code>sensitive()</code></strong> marks a value sensitive again when it lost that on the way; stage two uses both to consume stage one.</li>
+</ul>
+<h2 data-number="5.3" id="accounts-and-credentials"><span class="header-section-number">5.3</span> Accounts and credentials</h2>
+<p>   Before any configuration, three things must be in place.</p>
+<p><strong>Oracle Cloud.</strong> Create a free tier account, install the <code>oci</code> command line tool, and run <code>oci setup config</code>. It writes <code>~/.oci/config</code> with your tenancy, user, region, and API key, and the provider reads that file. Find your tenancy OCID in the console under your profile; the tenancy is also the root compartment, and building in it is fine for a booklet.</p>
+<p><strong>Cloudflare.</strong> Your domain’s DNS must be hosted by Cloudflare (the free plan is enough). Create an API token with the <code>Zone.DNS: Edit</code> permission for the zone, and copy the zone ID from the domain’s overview page. Two things read the token, so export it under both names:</p>
+<pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ export CLOUDFLARE_API_TOKEN=...       # the cloudflare provider</b>
+<b>$ export CLOUDFLARE_DNS_API_TOKEN=...   # the acme provider's dns challenge</b></pre>
+<p><strong>Let’s Encrypt.</strong> No account to create; the configuration registers one with an email address. Let’s Encrypt has a staging environment for testing and strict rate limits on the real one, and the configuration starts on staging.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> Everything in this chapter that is a secret comes from an environment variable or from <code>~/.oci/config</code>. The values that are not secret but are yours — the compartment, the domain, the zone ID — go in <code>terraform.tfvars</code>, which the examples’ <code>.gitignore</code> excludes, with an <code>example.tfvars</code> committed to show the form. The one file you never want to see in <code>git status</code> is a <code>.tfvars</code> with a token in it.</p>
+</div></div>
+<h2 data-number="5.4" id="stage-one-the-infrastructure"><span class="header-section-number">5.4</span> Stage one: the infrastructure</h2>
+<p>The <code>infra</code> directory’s providers are the four shown above. The variables are the things that are yours: <code>compartment_ocid</code>, <code>domain</code>, <code>cloudflare_zone_id</code>, <code>acme_email</code>, and with defaults <code>hostnames</code> (<code>["motd"]</code>), <code>ssh_public_key</code> (<code>~/.ssh/id_ed25519.pub</code>), <code>admin_cidr</code> (<code>0.0.0.0/0</code>, and you should narrow it), <code>ad_index</code> (<code>0</code>), and <code>acme_server</code> (the staging directory URL). See <code>variables.tf</code> in the examples for the descriptions and the validation. If you have no SSH key yet, <code>ssh-keygen -t ed25519</code> creates one in that place on macOS, Linux, and Windows alike.</p>
+<h3 data-number="5.4.1" id="the-network"><span class="header-section-number">5.4.1</span> The network</h3>
+<p>   Cloud networking is a small building. The <strong>VCN</strong> (virtual cloud network) is the building. A <strong>subnet</strong> is a floor. The <strong>internet gateway</strong> is the front door, the <strong>route table</strong> is the signs pointing at it, and the <strong>security list</strong> is the guard’s list of who may come in. <code>network.tf</code>:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;oci_core_vcn&quot;</span> <span class="st">&quot;motd&quot;</span> {</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  compartment_id <span class="op">=</span> <span class="va">var</span>.compartment_ocid</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  display_name   <span class="op">=</span> <span class="st">&quot;motd&quot;</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  cidr_blocks    <span class="op">=</span> [<span class="st">&quot;10.0.0.0/16&quot;</span>]</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>  dns_label      <span class="op">=</span> <span class="st">&quot;motd&quot;</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;oci_core_internet_gateway&quot;</span> <span class="st">&quot;motd&quot;</span> {</span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>  compartment_id <span class="op">=</span> <span class="va">var</span>.compartment_ocid</span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>  vcn_id         <span class="op">=</span> oci_core_vcn.motd.id</span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>  display_name   <span class="op">=</span> <span class="st">&quot;motd&quot;</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a><span class="co"># every VCN comes with a default route table; take it over and add a route out</span></span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;oci_core_default_route_table&quot;</span> <span class="st">&quot;motd&quot;</span> {</span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>  manage_default_resource_id <span class="op">=</span> oci_core_vcn.motd.default_route_table_id</span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>  route_rules {</span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a>    destination       <span class="op">=</span> <span class="st">&quot;0.0.0.0/0&quot;</span></span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>    network_entity_id <span class="op">=</span> oci_core_internet_gateway.motd.id</span>
+<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb2-22"><a href="#cb2-22" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Wut:</strong> Creating a VCN silently creates a default route table and a default security list with it. You cannot create them, because they already exist, and you cannot ignore them, because the subnet uses them. The <code>oci_core_default_*</code> resource types with <code>manage_default_resource_id</code> take over a default object and manage its contents. Several clouds have this pattern; the “default” resource types are the tell.</p>
+</div></div>
+<p>The security list is where <code>dynamic</code> from Chapter 4 pays off, because the rules follow the same pattern three times:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">locals</span> {</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>  open_ports <span class="op">=</span> {</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>    ssh   <span class="op">=</span> { port <span class="op">=</span> <span class="dv">22</span>, <span class="kw">source</span> <span class="op">=</span> <span class="va">var</span>.admin_cidr }</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>    http  <span class="op">=</span> { port <span class="op">=</span> <span class="dv">80</span>, <span class="kw">source</span> <span class="op">=</span> <span class="st">&quot;0.0.0.0/0&quot;</span> }</span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    https <span class="op">=</span> { port <span class="op">=</span> <span class="dv">443</span>, <span class="kw">source</span> <span class="op">=</span> <span class="st">&quot;0.0.0.0/0&quot;</span> }</span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;oci_core_default_security_list&quot;</span> <span class="st">&quot;motd&quot;</span> {</span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>  manage_default_resource_id <span class="op">=</span> oci_core_vcn.motd.default_security_list_id</span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>  egress_security_rules {</span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>    destination <span class="op">=</span> <span class="st">&quot;0.0.0.0/0&quot;</span></span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>    protocol    <span class="op">=</span> <span class="st">&quot;all&quot;</span></span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>  <span class="co"># one ingress rule per entry in local.open_ports</span></span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a>  <span class="kw">dynamic</span> <span class="st">&quot;ingress_security_rules&quot;</span> {</span>
+<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a>    <span class="at">for_each</span> <span class="op">=</span> <span class="va">local</span>.open_ports</span>
+<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a>    <span class="kw">content</span> {</span>
+<span id="cb3-21"><a href="#cb3-21" aria-hidden="true" tabindex="-1"></a>      protocol <span class="op">=</span> <span class="st">&quot;6&quot;</span> <span class="co"># tcp</span></span>
+<span id="cb3-22"><a href="#cb3-22" aria-hidden="true" tabindex="-1"></a>      <span class="kw">source</span>   <span class="op">=</span> ingress_security_rules.value.<span class="kw">source</span></span>
+<span id="cb3-23"><a href="#cb3-23" aria-hidden="true" tabindex="-1"></a>      tcp_options {</span>
+<span id="cb3-24"><a href="#cb3-24" aria-hidden="true" tabindex="-1"></a>        <span class="bu">min</span> <span class="op">=</span> ingress_security_rules.value.port</span>
+<span id="cb3-25"><a href="#cb3-25" aria-hidden="true" tabindex="-1"></a>        <span class="bu">max</span> <span class="op">=</span> ingress_security_rules.value.port</span>
+<span id="cb3-26"><a href="#cb3-26" aria-hidden="true" tabindex="-1"></a>      }</span>
+<span id="cb3-27"><a href="#cb3-27" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb3-28"><a href="#cb3-28" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb3-29"><a href="#cb3-29" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb3-30"><a href="#cb3-30" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-31"><a href="#cb3-31" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;oci_core_subnet&quot;</span> <span class="st">&quot;public&quot;</span> {</span>
+<span id="cb3-32"><a href="#cb3-32" aria-hidden="true" tabindex="-1"></a>  compartment_id <span class="op">=</span> <span class="va">var</span>.compartment_ocid</span>
+<span id="cb3-33"><a href="#cb3-33" aria-hidden="true" tabindex="-1"></a>  vcn_id         <span class="op">=</span> oci_core_vcn.motd.id</span>
+<span id="cb3-34"><a href="#cb3-34" aria-hidden="true" tabindex="-1"></a>  cidr_block     <span class="op">=</span> <span class="st">&quot;10.0.1.0/24&quot;</span></span>
+<span id="cb3-35"><a href="#cb3-35" aria-hidden="true" tabindex="-1"></a>  display_name   <span class="op">=</span> <span class="st">&quot;public&quot;</span></span>
+<span id="cb3-36"><a href="#cb3-36" aria-hidden="true" tabindex="-1"></a>  dns_label      <span class="op">=</span> <span class="st">&quot;public&quot;</span></span>
+<span id="cb3-37"><a href="#cb3-37" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p>  <code>open_ports</code> is a <strong>map</strong> of <strong>objects</strong>: keys to values, where each value has named fields. Iterating a map with <code>dynamic</code> gives <code>ingress_security_rules.value</code> (the object) and <code>ingress_security_rules.key</code> (the name), and adding a port is adding a line to the map.</p>
+<h3 data-number="5.4.2" id="the-machine"><span class="header-section-number">5.4.2</span> The machine</h3>
+<p>   <code>compute.tf</code> needs two lookups before it can create anything:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">locals</span> {</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  shape <span class="op">=</span> <span class="st">&quot;VM.Standard.E2.1.Micro&quot;</span> <span class="co"># always free: 1 OCPU, 1 GB</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  ads   <span class="op">=</span> <span class="kw">data</span>.oci_identity_availability_domains.ads.availability_domains</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="st">&quot;oci_identity_availability_domains&quot;</span> <span class="st">&quot;ads&quot;</span> {</span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>  compartment_id <span class="op">=</span> <span class="va">var</span>.compartment_ocid</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="st">&quot;oci_core_images&quot;</span> <span class="st">&quot;ubuntu&quot;</span> {</span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>  compartment_id           <span class="op">=</span> <span class="va">var</span>.compartment_ocid</span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>  operating_system         <span class="op">=</span> <span class="st">&quot;Canonical Ubuntu&quot;</span></span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>  operating_system_version <span class="op">=</span> <span class="st">&quot;24.04&quot;</span></span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>  shape                    <span class="op">=</span> <span class="va">local</span>.shape</span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>  sort_by                  <span class="op">=</span> <span class="st">&quot;TIMECREATED&quot;</span></span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a>  sort_order               <span class="op">=</span> <span class="st">&quot;DESC&quot;</span></span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p>Data sources are the read-only lookups from Chapter 2, now doing real work: which availability domains the region has, and which image ids are current Ubuntu for this machine type. The image list is sorted newest first, so <code>images[0]</code> is the latest. Hard-coding an image id would break the month the image is retired; the lookup does not.</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;oci_core_instance&quot;</span> <span class="st">&quot;motd&quot;</span> {</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  compartment_id      <span class="op">=</span> <span class="va">var</span>.compartment_ocid</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>  availability_domain <span class="op">=</span> <span class="va">local</span>.ads[<span class="va">var</span>.ad_index].name</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>  display_name        <span class="op">=</span> <span class="st">&quot;motd&quot;</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>  shape               <span class="op">=</span> <span class="va">local</span>.shape</span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>  source_details {</span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>    source_type <span class="op">=</span> <span class="st">&quot;image&quot;</span></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>    source_id   <span class="op">=</span> <span class="kw">data</span>.oci_core_images.ubuntu.images[<span class="dv">0</span>].id</span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>  create_vnic_details {</span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a>    subnet_id        <span class="op">=</span> oci_core_subnet.public.id</span>
+<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a>    assign_public_ip <span class="op">=</span> <span class="va">true</span></span>
+<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a>    hostname_label   <span class="op">=</span> <span class="st">&quot;motd&quot;</span></span>
+<span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb5-17"><a href="#cb5-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-18"><a href="#cb5-18" aria-hidden="true" tabindex="-1"></a>  metadata <span class="op">=</span> {</span>
+<span id="cb5-19"><a href="#cb5-19" aria-hidden="true" tabindex="-1"></a>    ssh_authorized_keys <span class="op">=</span> <span class="bu">file</span>(<span class="bu">pathexpand</span>(<span class="va">var</span>.ssh_public_key))</span>
+<span id="cb5-20"><a href="#cb5-20" aria-hidden="true" tabindex="-1"></a>    user_data           <span class="op">=</span> <span class="bu">base64encode</span>(<span class="bu">file</span>(<span class="st">&quot;</span><span class="ss">${</span><span class="va">path.module</span><span class="ss">}</span><span class="st">/cloud-init.yaml&quot;</span>))</span>
+<span id="cb5-21"><a href="#cb5-21" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb5-22"><a href="#cb5-22" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p>   <code>metadata</code> is how the machine is told things at first boot. <code>ssh_authorized_keys</code> gets your public key: <code>pathexpand</code> turns <code>~/.ssh/...</code> into an absolute path and <code>file</code> reads it. <code>user_data</code> is a cloud-init document, which Oracle wants base64 encoded, hence <code>base64encode(file(...))</code>.</p>
+<p><code>cloud-init.yaml</code> prepares the machine so that stage two only needs Docker:</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co">#cloud-config</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="fu">package_update</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="fu">packages</span><span class="kw">:</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> docker.io</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a><span class="fu">runcmd</span><span class="kw">:</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a><span class="co">  # the Oracle Ubuntu image ships a firewall that only lets SSH in</span></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> iptables -I INPUT 6 -m state --state NEW -p tcp --dport 80 -j ACCEPT</span></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> iptables -I INPUT 6 -m state --state NEW -p tcp --dport 443 -j ACCEPT</span></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> netfilter-persistent save</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a><span class="co">  # a little swap keeps a 1 GB instance alive while go builds</span></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> fallocate -l 2G /swapfile</span></span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> chmod 600 /swapfile</span></span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> mkswap /swapfile</span></span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> swapon /swapfile</span></span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> echo &#39;/swapfile none swap sw 0 0&#39; &gt;&gt; /etc/fstab</span></span>
+<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a><span class="co">  # let the ubuntu user drive docker over ssh</span></span>
+<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> usermod -aG docker ubuntu</span></span>
+<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> systemctl enable --now docker</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> The security list opens ports 80 and 443 at the network, and then nothing answers. Oracle’s Ubuntu images come with <code>iptables</code> rules that reject everything except SSH, inside the machine, and the console gives no hint. The two <code>iptables</code> lines in cloud-init are the fix, and <code>netfilter-persistent save</code> keeps them across reboots. This is the single most common “it does not work” in Oracle’s free tier.</p>
+</div></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> <code>Out of host capacity</code> means the availability domain has no free tier machines left, which is common. Try <code>-var ad_index=1</code>, or another region if the home region has one domain. The ARM machine type <code>VM.Standard.A1.Flex</code> is more generous (four cores and 24 GB free) but far harder to get; if you do get one, Docker builds the image for ARM on the machine itself, so nothing else changes.</p>
+</div></div>
+<h3 data-number="5.4.3" id="the-name"><span class="header-section-number">5.4.3</span> The name</h3>
+<p>   <code>dns.tf</code> points the names at the machine:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">locals</span> {</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  fqdns <span class="op">=</span> [<span class="cf">for</span> h <span class="cf">in</span> <span class="va">var</span>.hostnames : <span class="st">&quot;</span><span class="ss">${</span><span class="va">h</span><span class="ss">}</span><span class="st">.</span><span class="ss">${</span><span class="va">var.domain</span><span class="ss">}</span><span class="st">&quot;</span>]</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;cloudflare_dns_record&quot;</span> <span class="st">&quot;motd&quot;</span> {</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">for_each</span> <span class="op">=</span> <span class="bu">toset</span>(<span class="va">local</span>.fqdns)</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>  zone_id <span class="op">=</span> <span class="va">var</span>.cloudflare_zone_id</span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>  name    <span class="op">=</span> <span class="va">each</span>.value</span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>  type    <span class="op">=</span> <span class="st">&quot;A&quot;</span></span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>  <span class="kw">content</span> <span class="op">=</span> oci_core_instance.motd.public_ip</span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a>  ttl     <span class="op">=</span> <span class="dv">60</span></span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>  proxied <span class="op">=</span> <span class="va">false</span></span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p><code>for_each</code> on a resource creates one instance per element of a set or map. Inside the block, <code>each.value</code> is the element (and <code>each.key</code> its key, which for a set is the same thing). <code>toset</code> turns the list of names into a set, because <code>for_each</code> wants keys that identify each instance, not positions that shift when you insert one in the middle. The instances are addressed as <code>cloudflare_dns_record.motd["motd.example.com"]</code>.</p>
+<p><code>content</code> is the machine’s public address, known only after the instance exists, which orders the record after the machine. <code>proxied = false</code> keeps Cloudflare out of the path so that the machine’s own certificate is the one browsers see.</p>
+<h3 data-number="5.4.4" id="the-certificate"><span class="header-section-number">5.4.4</span> The certificate</h3>
+<p>   <code>cert.tf</code>:</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;tls_private_key&quot;</span> <span class="st">&quot;account&quot;</span> {</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>  algorithm   <span class="op">=</span> <span class="st">&quot;ECDSA&quot;</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>  ecdsa_curve <span class="op">=</span> <span class="st">&quot;P256&quot;</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;acme_registration&quot;</span> <span class="st">&quot;motd&quot;</span> {</span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>  account_key_pem <span class="op">=</span> tls_private_key.account.private_key_pem</span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>  email_address   <span class="op">=</span> <span class="va">var</span>.acme_email</span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;acme_certificate&quot;</span> <span class="st">&quot;motd&quot;</span> {</span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a>  account_key_pem           <span class="op">=</span> acme_registration.motd.account_key_pem</span>
+<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a>  common_name               <span class="op">=</span> <span class="va">local</span>.fqdns[<span class="dv">0</span>]</span>
+<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a>  subject_alternative_names <span class="op">=</span> <span class="bu">slice</span>(<span class="va">local</span>.fqdns, <span class="dv">1</span>, <span class="bu">length</span>(<span class="va">local</span>.fqdns))</span>
+<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-16"><a href="#cb8-16" aria-hidden="true" tabindex="-1"></a>  dns_challenge {</span>
+<span id="cb8-17"><a href="#cb8-17" aria-hidden="true" tabindex="-1"></a>    <span class="kw">provider</span> <span class="op">=</span> <span class="st">&quot;cloudflare&quot;</span> <span class="co"># reads CLOUDFLARE_DNS_API_TOKEN</span></span>
+<span id="cb8-18"><a href="#cb8-18" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb8-19"><a href="#cb8-19" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p>ACME is the protocol Let’s Encrypt speaks: prove you control the name, get a certificate for it. The <strong>DNS challenge</strong> proves control by publishing a token in a TXT record, which the provider does through Cloudflare and removes afterwards. It has two advantages over the HTTP challenge: nothing needs to be listening on port 80 yet, and it works for wildcard names.</p>
+<p> The first name is the certificate’s common name and the rest are alternative names; <code>slice(list, 1, length)</code> is “everything but the first”.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Start on the staging server, which the <code>acme_server</code> default does. Staging certificates are not trusted by browsers, but they prove the whole chain works, and the production server limits you to five certificates per name per week. Once <code>https://motd.example.com/</code> answers (with a warning), apply once more with <code>-var acme_server=https://acme-v02.api.letsencrypt.org/directory</code> and the certificate is replaced with a real one.</p>
+</div></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Wut:</strong> A certificate expires after ninety days and the provider renews it by planning a replacement whenever thirty days or fewer remain (<code>min_days_remaining</code>). That means renewal is “run <code>tofu apply</code> at least monthly”, by hand, by cron, or by a scheduled CI job. Nothing renews it while you are not looking.</p>
+</div></div>
+<h3 data-number="5.4.5" id="outputs"><span class="header-section-number">5.4.5</span> Outputs</h3>
+<p><code>outputs.tf</code> is what stage two needs to know:</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="kw">output</span> <span class="st">&quot;public_ip&quot;</span> {</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>  value <span class="op">=</span> oci_core_instance.motd.public_ip</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="kw">output</span> <span class="st">&quot;fqdn&quot;</span> {</span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>  value <span class="op">=</span> <span class="va">local</span>.fqdns[<span class="dv">0</span>]</span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a><span class="kw">output</span> <span class="st">&quot;certificate_pem&quot;</span> {</span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>  value <span class="op">=</span> acme_certificate.motd.certificate_pem</span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a><span class="kw">output</span> <span class="st">&quot;issuer_pem&quot;</span> {</span>
+<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a>  value <span class="op">=</span> acme_certificate.motd.issuer_pem</span>
+<span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb9-16"><a href="#cb9-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-17"><a href="#cb9-17" aria-hidden="true" tabindex="-1"></a><span class="kw">output</span> <span class="st">&quot;private_key_pem&quot;</span> {</span>
+<span id="cb9-18"><a href="#cb9-18" aria-hidden="true" tabindex="-1"></a>  value     <span class="op">=</span> acme_certificate.motd.private_key_pem</span>
+<span id="cb9-19"><a href="#cb9-19" aria-hidden="true" tabindex="-1"></a>  <span class="bu">sensitive</span> <span class="op">=</span> <span class="va">true</span></span>
+<span id="cb9-20"><a href="#cb9-20" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p>Apply stage one with your values in <code>terraform.tfvars</code>:</p>
+<pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ cd oracle/infra</b>
+<b>$ tofu init</b>
+<b>$ tofu apply</b></pre>
+<p>Expect the machine to take a couple of minutes, cloud-init a couple more after that, and the DNS challenge a minute or two; unlike the timings in earlier chapters, these are estimates, since this stage was validated against the provider schemas but not applied while writing the booklet. When it finishes you can log in, and after cloud-init is done, <code>docker ps</code> works without <code>sudo</code>:</p>
+<pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ ssh ubuntu@$(tofu output -raw fqdn) docker ps</b></pre>
+<h2 data-number="5.5" id="stage-two-the-application"><span class="header-section-number">5.5</span> Stage two: the application</h2>
+<p>  The <code>app</code> directory starts by reading stage one’s outputs:</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="st">&quot;terraform_remote_state&quot;</span> <span class="st">&quot;infra&quot;</span> {</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">backend</span> <span class="op">=</span> <span class="st">&quot;local&quot;</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>  config <span class="op">=</span> {</span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>    path <span class="op">=</span> <span class="st">&quot;</span><span class="ss">${</span><span class="va">path.module</span><span class="ss">}</span><span class="st">/../infra/terraform.tfstate&quot;</span></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a><span class="kw">locals</span> {</span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>  infra <span class="op">=</span> <span class="kw">data</span>.terraform_remote_state.infra.outputs</span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a><span class="kw">provider</span> <span class="st">&quot;docker&quot;</span> {</span>
+<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a>  host     <span class="op">=</span> <span class="bu">coalesce</span>(<span class="va">var</span>.docker_host, <span class="st">&quot;ssh://ubuntu@</span><span class="ss">${</span><span class="va">local.infra.fqdn</span><span class="ss">}</span><span class="st">&quot;</span>)</span>
+<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a>  ssh_opts <span class="op">=</span> [<span class="st">&quot;-o&quot;</span>, <span class="st">&quot;StrictHostKeyChecking=accept-new&quot;</span>]</span>
+<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p><code>terraform_remote_state</code> is a data source that reads another configuration’s state file and exposes its outputs. Only outputs: the other configuration decides what it publishes, and the rest of its state stays private. With a <code>local</code> backend the config is a path; with a shared backend it is the same settings the other configuration uses (Appendix A).</p>
+<p> The Docker provider then points at the machine over SSH. The provider runs the same <code>ssh</code> you do (on Windows, the OpenSSH client that ships with the system), so your key and agent are used, and <code>accept-new</code> records the host key on first contact instead of stopping to ask, which would hang an apply. The <code>docker_host</code> variable defaults to <code>null</code> and exists so that the same configuration can be pointed at any Docker host, including your own for a dry run; <code>coalesce</code> returns its first argument that is not null.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> The provider has to reach the machine during <code>plan</code>, not just <code>apply</code>. Run stage two before stage one is done and you get a connection error, not a plan. That is the reason for two stages: a provider’s configuration has to be known, and reachable, before planning the things it manages.</p>
+</div></div>
+<h3 data-number="5.5.1" id="chapter-3-as-a-module"><span class="header-section-number">5.5.1</span> Chapter 3 as a module</h3>
+<p>The Chapter 3 configuration moved into <code>modules/motd-docker</code> with four changes, and each teaches something about modules.</p>
+<p><strong>Values became variables.</strong> <code>app_dir</code>, <code>seed_sql</code>, <code>db_password</code>, <code>timezone</code>, and <code>port</code> are inputs now; the module builds the same network, volume, database, and web server from them.</p>
+<p><strong>The bind mount became an <code>upload</code>.</strong> Chapter 3 wrote the seed to a file and bind-mounted its directory into the database container. That file is on your laptop, and the Docker host is now a machine in Oracle’s data center, where the path does not exist. The <code>upload</code> block copies content into the container at creation instead:</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>  upload {</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">content</span> <span class="op">=</span> <span class="va">var</span>.seed_sql</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>    <span class="bu">file</span>    <span class="op">=</span> <span class="st">&quot;/docker-entrypoint-initdb.d/001-sayings.sql&quot;</span></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>  }</span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Wut:</strong> Paths in a <code>volumes</code> block are paths on the Docker host, not on the machine running <code>tofu</code>. That is invisible when they are the same machine and very visible when they are not. The same goes for <code>local-exec</code> provisioners, which run where <code>tofu</code> runs, and <code>remote-exec</code> provisioners, which run on the resource. Always ask “where does this path live” when a configuration crosses a machine boundary.</p>
+</div></div>
+<p><strong>A resource stands in for the seed.</strong> <code>replace_triggered_by</code> only accepts resource references, and there is no <code>local_file</code> any more, so the module wraps the SQL in a <code>terraform_data</code> and the volume watches that:</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;terraform_data&quot;</span> <span class="st">&quot;seed&quot;</span> {</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>  input <span class="op">=</span> <span class="va">var</span>.seed_sql</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;docker_volume&quot;</span> <span class="st">&quot;db_data&quot;</span> {</span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>  name <span class="op">=</span> <span class="st">&quot;motd-db-data&quot;</span></span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">lifecycle</span> {</span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>    replace_triggered_by <span class="op">=</span> [terraform_data.seed]</span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p><strong>The port became optional.</strong> A <code>dynamic "ports"</code> block over <code>var.port == null ? [] : [var.port]</code> publishes the web server’s port only when asked, the Chapter 4 idiom. Stage two does not ask, because only the proxy should talk to the web server.</p>
+<p>The module’s outputs are the network name and the web container’s name, which are the two things the proxy needs.</p>
+<h3 data-number="5.5.2" id="the-proxy"><span class="header-section-number">5.5.2</span> The proxy</h3>
+<p>  <code>main.tf</code> in <code>app</code>:</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="kw">module</span> <span class="st">&quot;sayings&quot;</span> {</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">source</span> <span class="op">=</span> <span class="st">&quot;github.com/BooksByGorgo/opentofu//tasting/examples/motd?ref=main&quot;</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;random_password&quot;</span> <span class="st">&quot;db&quot;</span> {</span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>  <span class="bu">length</span>  <span class="op">=</span> <span class="dv">24</span></span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>  special <span class="op">=</span> <span class="va">false</span></span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a><span class="kw">module</span> <span class="st">&quot;motd&quot;</span> {</span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a>  <span class="kw">source</span> <span class="op">=</span> <span class="st">&quot;../../modules/motd-docker&quot;</span></span>
+<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-13"><a href="#cb13-13" aria-hidden="true" tabindex="-1"></a>  app_dir     <span class="op">=</span> <span class="st">&quot;</span><span class="ss">${</span><span class="va">path.module</span><span class="ss">}</span><span class="st">/app&quot;</span></span>
+<span id="cb13-14"><a href="#cb13-14" aria-hidden="true" tabindex="-1"></a>  seed_sql    <span class="op">=</span> <span class="kw">module</span>.sayings.sql</span>
+<span id="cb13-15"><a href="#cb13-15" aria-hidden="true" tabindex="-1"></a>  db_password <span class="op">=</span> random_password.db.result</span>
+<span id="cb13-16"><a href="#cb13-16" aria-hidden="true" tabindex="-1"></a>  timezone    <span class="op">=</span> <span class="va">var</span>.timezone</span>
+<span id="cb13-17"><a href="#cb13-17" aria-hidden="true" tabindex="-1"></a>  <span class="co"># no host port: only the proxy talks to the web server</span></span>
+<span id="cb13-18"><a href="#cb13-18" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb13-19"><a href="#cb13-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-20"><a href="#cb13-20" aria-hidden="true" tabindex="-1"></a><span class="kw">locals</span> {</span>
+<span id="cb13-21"><a href="#cb13-21" aria-hidden="true" tabindex="-1"></a>  caddyfile <span class="op">=</span> <span class="op">&lt;&lt;-</span>EOT</span>
+<span id="cb13-22"><a href="#cb13-22" aria-hidden="true" tabindex="-1"></a>    ${<span class="va">local</span>.infra.fqdn} {</span>
+<span id="cb13-23"><a href="#cb13-23" aria-hidden="true" tabindex="-1"></a>        tls <span class="op">/</span>certs<span class="op">/</span>tls.crt <span class="op">/</span>certs<span class="op">/</span>tls.key</span>
+<span id="cb13-24"><a href="#cb13-24" aria-hidden="true" tabindex="-1"></a>        reverse_proxy ${<span class="kw">module</span>.motd.web_container}:<span class="dv">8080</span></span>
+<span id="cb13-25"><a href="#cb13-25" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb13-26"><a href="#cb13-26" aria-hidden="true" tabindex="-1"></a>  EOT</span>
+<span id="cb13-27"><a href="#cb13-27" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p>The Caddyfile is a <strong>heredoc</strong>: <code>&lt;&lt;-EOT</code> starts a multi-line string that ends at a line containing only <code>EOT</code>, and the <code>-</code> strips the common leading indentation so that the configuration can stay indented. Interpolation works inside it. Caddy is told the name it serves, where its certificate is, and where to send requests; given a name and a certificate it serves HTTPS on 443 and redirects port 80 by itself.</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;docker_image&quot;</span> <span class="st">&quot;caddy&quot;</span> {</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>  name <span class="op">=</span> <span class="st">&quot;caddy:2&quot;</span></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;docker_container&quot;</span> <span class="st">&quot;proxy&quot;</span> {</span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>  name  <span class="op">=</span> <span class="st">&quot;motd-proxy&quot;</span></span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>  image <span class="op">=</span> docker_image.caddy.image_id</span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>  networks_advanced {</span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a>    name <span class="op">=</span> <span class="kw">module</span>.motd.network</span>
+<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-13"><a href="#cb14-13" aria-hidden="true" tabindex="-1"></a>  ports {</span>
+<span id="cb14-14"><a href="#cb14-14" aria-hidden="true" tabindex="-1"></a>    internal <span class="op">=</span> <span class="dv">80</span></span>
+<span id="cb14-15"><a href="#cb14-15" aria-hidden="true" tabindex="-1"></a>    external <span class="op">=</span> <span class="va">var</span>.http_port</span>
+<span id="cb14-16"><a href="#cb14-16" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb14-17"><a href="#cb14-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-18"><a href="#cb14-18" aria-hidden="true" tabindex="-1"></a>  ports {</span>
+<span id="cb14-19"><a href="#cb14-19" aria-hidden="true" tabindex="-1"></a>    internal <span class="op">=</span> <span class="dv">443</span></span>
+<span id="cb14-20"><a href="#cb14-20" aria-hidden="true" tabindex="-1"></a>    external <span class="op">=</span> <span class="va">var</span>.https_port</span>
+<span id="cb14-21"><a href="#cb14-21" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb14-22"><a href="#cb14-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-23"><a href="#cb14-23" aria-hidden="true" tabindex="-1"></a>  upload {</span>
+<span id="cb14-24"><a href="#cb14-24" aria-hidden="true" tabindex="-1"></a>    <span class="kw">content</span> <span class="op">=</span> <span class="va">local</span>.caddyfile</span>
+<span id="cb14-25"><a href="#cb14-25" aria-hidden="true" tabindex="-1"></a>    <span class="bu">file</span>    <span class="op">=</span> <span class="st">&quot;/etc/caddy/Caddyfile&quot;</span></span>
+<span id="cb14-26"><a href="#cb14-26" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb14-27"><a href="#cb14-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-28"><a href="#cb14-28" aria-hidden="true" tabindex="-1"></a>  upload {</span>
+<span id="cb14-29"><a href="#cb14-29" aria-hidden="true" tabindex="-1"></a>    <span class="kw">content</span> <span class="op">=</span> <span class="st">&quot;</span><span class="ss">${</span><span class="va">local.infra.certificate_pem</span><span class="ss">}${</span><span class="va">local.infra.issuer_pem</span><span class="ss">}</span><span class="st">&quot;</span></span>
+<span id="cb14-30"><a href="#cb14-30" aria-hidden="true" tabindex="-1"></a>    <span class="bu">file</span>    <span class="op">=</span> <span class="st">&quot;/certs/tls.crt&quot;</span></span>
+<span id="cb14-31"><a href="#cb14-31" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb14-32"><a href="#cb14-32" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-33"><a href="#cb14-33" aria-hidden="true" tabindex="-1"></a>  upload {</span>
+<span id="cb14-34"><a href="#cb14-34" aria-hidden="true" tabindex="-1"></a>    <span class="kw">content</span> <span class="op">=</span> <span class="bu">sensitive</span>(<span class="va">local</span>.infra.private_key_pem)</span>
+<span id="cb14-35"><a href="#cb14-35" aria-hidden="true" tabindex="-1"></a>    <span class="bu">file</span>    <span class="op">=</span> <span class="st">&quot;/certs/tls.key&quot;</span></span>
+<span id="cb14-36"><a href="#cb14-36" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb14-37"><a href="#cb14-37" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p>Three uploads: the Caddyfile, the certificate with its issuer chain appended, and the private key. A changed upload replaces the container, so a renewed certificate in stage one becomes a new proxy in stage two.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p> <strong>Trap:</strong> Outputs lose their sensitivity when read through <code>terraform_remote_state</code>. Without the <code>sensitive()</code> wrapper, the private key is printed in full in every plan that creates the proxy, and in the logs of whatever CI ran it. Wrap any secret that comes from another state, and check the plan for anything that should say <code>(sensitive value)</code> and does not.</p>
+</div></div>
+<p>The check is the one from Chapter 3 with the real URL and <code>insecure = true</code>, because staging certificates are not trusted by the HTTP provider either.</p>
+<h3 data-number="5.5.3" id="running-it"><span class="header-section-number">5.5.3</span> Running it</h3>
+<pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ cd ../app</b>
+<b>$ tofu init</b>
+<b>$ tofu apply</b></pre>
+<p>The first apply builds the image on the machine, which should take a few minutes on one core with a gigabyte of memory (the swap in cloud-init is what makes it possible), pulls MySQL and Caddy, loads the sayings, and starts the proxy. That estimate is untested too: the application stage was applied against a local Docker daemon with a self-signed certificate standing in for stage one, not against the Oracle machine. Then:</p>
+<pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ curl -k $(tofu output -raw url)</b></pre>
+<p>Or open the URL in a browser, accept the staging warning, and read your saying of the second. Switch stage one to the production ACME server, apply it, apply stage two, and the warning is gone.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> Destroy in the reverse order of creation: <code>app</code> first, then <code>infra</code>. Destroying <code>infra</code> first deletes the machine that <code>app</code>’s Docker provider needs to reach, and <code>tofu destroy</code> in <code>app</code> then fails trying to refresh containers that no longer exist. If it happens, <code>tofu destroy -refresh=false</code> in <code>app</code> or deleting its state gets you unstuck; the containers died with the machine.</p>
+</div></div>
+<h2 data-number="5.6" id="key-points"><span class="header-section-number">5.6</span> Key Points</h2>
+<ul>
+<li>Split configurations by lifecycle: infrastructure that changes rarely, application that changes often. <code>terraform_remote_state</code> passes outputs from one to the other.</li>
+<li>Cloud networks are buildings: VCN, subnet, gateway, route table, security list. Default objects are managed with the <code>default</code> resource types.</li>
+<li>Data sources look up things you should not hard-code, like the newest image.</li>
+<li>cloud-init prepares a machine at first boot, and on Oracle it must also open the machine’s own firewall.</li>
+<li><code>for_each</code> makes one resource instance per element of a set or map, addressed by key.</li>
+<li>The ACME DNS challenge issues certificates without needing anything listening, and renewal means applying again once thirty days or fewer remain.</li>
+<li>Paths and commands run where the provider’s target is, not where you are; <code>upload</code> moves content across that boundary.</li>
+<li>Secrets read from another state are not sensitive until you say so.</li>
+</ul>
+<h2 data-number="5.7" id="new-syntax"><span class="header-section-number">5.7</span> New Syntax</h2>
+<table>
+<colgroup>
+<col style="width: 55%" />
+<col style="width: 44%" />
+</colgroup>
+<thead>
+<tr>
+<th style="text-align: left;">Syntax</th>
+<th style="text-align: left;">What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>data "TYPE" "NAME" { filters }</code></td>
+<td style="text-align: left;">A lookup, with results in <code>data.TYPE.NAME.ATTR</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>for_each = toset(list)</code> with <code>each.value</code></td>
+<td style="text-align: left;">One resource instance per element</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>RESOURCE["key"]</code></td>
+<td style="text-align: left;">Address of one instance of a <code>for_each</code> resource</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>{ a = { port = 22 } }</code></td>
+<td style="text-align: left;">A map of objects</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>dynamic</code> over a map: <code>.key</code>, <code>.value</code></td>
+<td style="text-align: left;">Iterating a map into nested blocks</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>&lt;&lt;-EOT ... EOT</code></td>
+<td style="text-align: left;">Indented heredoc string</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>file</code>, <code>pathexpand</code>, <code>base64encode</code>, <code>toset</code>, <code>slice</code></td>
+<td style="text-align: left;">More built-in functions</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>data "terraform_remote_state"</code></td>
+<td style="text-align: left;">Read another configuration’s outputs</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>sensitive(x)</code></td>
+<td style="text-align: left;">Mark a value sensitive</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>manage_default_resource_id</code></td>
+<td style="text-align: left;">Take over a cloud’s default object</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>upload { content, file }</code></td>
+<td style="text-align: left;">Copy content into a container at creation</td>
+</tr>
+</tbody>
+</table>
+<h2 data-number="5.8" id="try-it"><span class="header-section-number">5.8</span> Try It</h2>
+<ul>
+<li>Add <code>"www"</code> to <code>hostnames</code> and apply both stages. Which resources change in each?</li>
+<li>Remove the certificate plumbing and let Caddy get its own certificate: a Caddyfile with just the name and <code>reverse_proxy</code> does it, using the HTTP challenge on port 80. Compare the two approaches: what does each need open, and who renews?</li>
+<li>Move stage one’s state to Oracle Object Storage using the <code>s3</code> backend with the compatibility endpoint, and change stage two’s remote state to match.</li>
+<li>Write a GitHub Actions workflow that runs <code>tofu apply</code> on stage one weekly to renew the certificate, with the tokens in repository secrets.</li>
+<li>Get an <code>A1.Flex</code> machine, install k3s from cloud-init, fetch its kubeconfig, and deploy the Chapter 4 module to it with a <code>kubernetes_ingress_v1</code> that uses the certificate as a <code>kubernetes.io/tls</code> secret. You will need to push the image to a registry; <code>ghcr.io</code> with a GitHub token that has the <code>write:packages</code> scope works.</li>
+<li>Narrow <code>admin_cidr</code> to your own address and confirm SSH from elsewhere fails and HTTPS still works.</li>
+</ul>
+<h2 data-number="5.9" id="exercises"><span class="header-section-number">5.9</span> Exercises</h2>
+<ol type="1">
+<li><p><strong>Think about it:</strong> Stage two reads stage one’s outputs through remote state. Why not put everything in one configuration, with the Docker provider’s <code>host</code> built from <code>oci_core_instance.motd.public_ip</code> by interpolation?</p></li>
+<li><p><strong>What does this do?</strong> With <code>hostnames = ["motd", "www"]</code> and <code>domain = "example.com"</code>, what are the addresses of the DNS record instances, and what are <code>common_name</code> and <code>subject_alternative_names</code> on the certificate?</p></li>
+<li><p><strong>Calculation:</strong> A certificate was issued on March 1st with <code>min_days_remaining = 30</code>. On which day does <code>tofu plan</code> first show it being replaced, and if you apply only on the first of each month, how many days of validity does the old certificate have left on the day it is replaced?</p></li>
+<li><p><strong>Where is the bug?</strong></p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;cloudflare_dns_record&quot;</span> <span class="st">&quot;motd&quot;</span> {</span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">for_each</span> <span class="op">=</span> <span class="va">local</span>.fqdns</span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>  zone_id <span class="op">=</span> <span class="va">var</span>.cloudflare_zone_id</span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>  name    <span class="op">=</span> <span class="va">each</span>.value</span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>  type    <span class="op">=</span> <span class="st">&quot;A&quot;</span></span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>  <span class="kw">content</span> <span class="op">=</span> oci_core_instance.motd.public_ip</span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>  ttl     <span class="op">=</span> <span class="dv">60</span></span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div></li>
+<li><p><strong>Where is the bug?</strong> The machine is up, the security list opens 443, DNS resolves, Caddy is running, and <code>curl https://motd.example.com/</code> times out.</p></li>
+<li><p><strong>Write a configuration</strong> for a second, staging machine in the same VCN with its own name (<code>motd-staging.example.com</code>), sharing the subnet and security list, by turning the instance, the record, and the certificate into a module called twice. Decide what the module’s variables should be before you write it.</p></li>
+</ol>
+<h1 class="unnumbered" id="references">References</h1>
+<div id="refs" class="references csl-bib-body" data-entry-spacing="0" role="list">
+<div id="ref-OCIProvider" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[1] </div><div class="csl-right-inline">Oracle, <span>“<span>Terraform</span> provider for oracle cloud infrastructure.”</span> 2026. Available: <a href="https://docs.oracle.com/en-us/iaas/Content/dev/terraform/home.htm">https://docs.oracle.com/en-us/iaas/Content/dev/terraform/home.htm</a></div>
+</div>
+<div id="ref-CFProvider" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[2] </div><div class="csl-right-inline">Cloudflare, <span>“<span>Terraform</span> provider for cloudflare.”</span> 2026. Available: <a href="https://github.com/cloudflare/terraform-provider-cloudflare/blob/master/docs/index.md">https://github.com/cloudflare/terraform-provider-cloudflare/blob/master/docs/index.md</a></div>
+</div>
+<div id="ref-ACMEProviderDocs" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[3] </div><div class="csl-right-inline">C. Marchesi, <span>“<span>Terraform</span> provider for <span>ACME</span>: documentation.”</span> 2026. Available: <a href="https://github.com/vancluever/terraform-provider-acme/blob/main/docs/index.md">https://github.com/vancluever/terraform-provider-acme/blob/main/docs/index.md</a></div>
+</div>
+<div id="ref-TLSProviderDocs" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[4] </div><div class="csl-right-inline">HashiCorp, <span>“<span>Terraform</span> provider for <span>TLS</span>: documentation.”</span> 2026. Available: <a href="https://github.com/hashicorp/terraform-provider-tls/blob/main/docs/index.md">https://github.com/hashicorp/terraform-provider-tls/blob/main/docs/index.md</a></div>
+</div>
+</div>
+
+{% endraw %}

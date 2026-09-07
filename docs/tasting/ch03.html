@@ -1,0 +1,548 @@
+---
+layout: default
+title: "3. A Database of Sayings"
+parent: "Gorgo Tasting OpenTofu and Terraform"
+nav_order: 3
+---
+
+{% raw %}
+<h1 data-number="3" id="a-database-of-sayings"><span class="header-section-number">3</span> A Database of Sayings</h1>
+<p><strong>The need.</strong> A configuration does not only wire values through; sometimes it has to produce them: generate data, render a file, make a password. Secrets must exist without appearing in any file you edit, and must be marked so that the tool keeps them off the screen. Some dependencies are invisible to providers, like “new seed data means a new volume”, and some assumptions deserve to fail the plan rather than fail an hour later. And “created” must mean “ready”, or everything downstream starts too early.</p>
+<p><strong>Why it matters.</strong> Expressions and templates keep the configuration the single source of truth for derived data, instead of a checked-in file that drifts. The <code>random</code> provider and <code>sensitive</code> are how secrets are generated once and handled carefully everywhere after. Lifecycle rules, preconditions, and explicit dependencies are the tools for the ordering and rebuild logic that providers cannot infer.</p>
+<p><strong>Why it is hard.</strong> Generated data has to be escaped, counted, and checked before it can be trusted. A secret in state is still a secret, and the tool’s notion of sensitivity ends at the terminal. Replacement chains have to be stated exactly, or a change rebuilds too little (stale data) or too much (a rebuilt web server for every edit). Readiness is not existence, and a provider has to be told what “healthy” means.</p>
+<p><strong>The strategy.</strong> Pull the two word lists from the booklet’s public repository with a <code>module</code> block, combine them with <code>setproduct</code> and a <code>for</code> expression, render the SQL with <code>templatefile</code>, write it with <code>local_file</code>, and guard it with a <code>precondition</code>. Generate the password with <code>random_password</code>, mark it sensitive, and pass it only where it is needed. State the invisible dependency with <code>replace_triggered_by</code>, the ordering with <code>depends_on</code>, and readiness with a health check that creation waits on. The example is a MySQL database seeded with 3600 sayings, one per second of the hour, and the web server from Chapter 2 rewritten to look up the saying for the current time.</p>
+<h2 data-number="3.1" id="two-more-providers"><span class="header-section-number">3.1</span> Two more providers</h2>
+<p>  Chapter 2 used one provider that talks to a real system. This chapter adds two that do not talk to anything: they exist so that a configuration can produce values and files of its own. Neither is built into the tool (Appendix B lists what is); both come from the registry, so <code>versions.tf</code> in the <code>database</code> directory grows two entries:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">terraform</span> {</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">required_version</span> <span class="op">=</span> <span class="st">&quot;&gt;= 1.6&quot;</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  <span class="kw">required_providers</span> {</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    docker <span class="op">=</span> {</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>      <span class="kw">source</span>  <span class="op">=</span> <span class="st">&quot;kreuzwerker/docker&quot;</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>      version <span class="op">=</span> <span class="st">&quot;~&gt; 3.0&quot;</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    random <span class="op">=</span> {</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>      <span class="kw">source</span>  <span class="op">=</span> <span class="st">&quot;hashicorp/random&quot;</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>      version <span class="op">=</span> <span class="st">&quot;~&gt; 3.6&quot;</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>    <span class="va">local</span> <span class="op">=</span> {</span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>      <span class="kw">source</span>  <span class="op">=</span> <span class="st">&quot;hashicorp/local&quot;</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>      version <span class="op">=</span> <span class="st">&quot;~&gt; 2.5&quot;</span></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>    http <span class="op">=</span> {</span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>      <span class="kw">source</span>  <span class="op">=</span> <span class="st">&quot;hashicorp/http&quot;</span></span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>      version <span class="op">=</span> <span class="st">&quot;~&gt; 3.4&quot;</span></span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a><span class="kw">provider</span> <span class="st">&quot;docker&quot;</span> {}</span></code></pre></div>
+<p>The <strong>random</strong> provider generates values: <code>random_password</code> and <code>random_string</code> for text, <code>random_integer</code>, <code>random_id</code>, <code>random_uuid</code>, and <code>random_pet</code> for the kind of names Docker gives containers <span class="citation" data-cites="RandomProviderDocs">[1]</span>. What makes them resources rather than functions is memory. A function like <code>uuid()</code> gives a new answer every time it is evaluated; a <code>random_password</code> resource generates its value once, when it is created, stores it in state, and hands back the same value on every later plan until the resource is replaced. That is the property a password needs, and <code>random_password</code> marks its <code>result</code> as sensitive so that it stays off the screen.</p>
+<p>The <strong>local</strong> provider works with files on the machine running <code>tofu</code>: <code>local_file</code> writes a file with a given <code>content</code> to a given <code>filename</code>, and <code>local_sensitive_file</code> does the same without echoing the content in plans <span class="citation" data-cites="LocalProviderDocs LocalFile">[2], [3]</span>. The file is a resource like any other: created on apply, replaced when its content changes, and deleted on destroy. This chapter uses it to write the SQL that seeds the database, so that the seed is generated from the configuration rather than checked in by hand.</p>
+<h2 data-number="3.2" id="the-lifecycle-block"><span class="header-section-number">3.2</span> The lifecycle block</h2>
+<p>  Every argument you have written so far belonged to a resource type and was handed to its provider. A few arguments belong to the tool instead, and are accepted by every resource regardless of type; these are the <strong>meta-arguments</strong>, and <code>depends_on</code> from Chapter 2 is one of them. The <code>lifecycle</code> block collects the rest <span class="citation" data-cites="OTF_Lifecycle">[4]</span>:</p>
+<table>
+<colgroup>
+<col style="width: 63%" />
+<col style="width: 36%" />
+</colgroup>
+<thead>
+<tr>
+<th style="text-align: left;">Setting</th>
+<th style="text-align: left;">What it tells the tool</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>create_before_destroy = true</code></td>
+<td style="text-align: left;">When replacing, build the new one before removing the old</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>prevent_destroy = true</code></td>
+<td style="text-align: left;">Refuse any plan that would destroy this</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>ignore_changes = [ ... ]</code></td>
+<td style="text-align: left;">Do not plan updates for these arguments when they drift</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>replace_triggered_by = [ ... ]</code></td>
+<td style="text-align: left;">Replace this whenever those resources change</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>precondition { }</code></td>
+<td style="text-align: left;">An assumption checked before the resource is planned</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>postcondition { }</code></td>
+<td style="text-align: left;">A guarantee checked after the resource is applied</td>
+</tr>
+</tbody>
+</table>
+<p>The way to think about them: a provider knows how its own resource type behaves, but it cannot know how your resources relate to each other or what you are assuming about them. <code>lifecycle</code> is where you write that down. <code>replace_triggered_by</code> expresses a relationship the provider cannot see (new seed data means a new volume); <code>precondition</code> and <code>postcondition</code> express assumptions and guarantees as expressions that fail the plan or the apply with your own error message <span class="citation" data-cites="OTF_CustomConditions">[5]</span>; <code>prevent_destroy</code> and <code>ignore_changes</code> express intent about how the resource may change. This chapter uses <code>replace_triggered_by</code> and <code>precondition</code>; the others appear in Appendix A’s advice on stateful resources and drift.</p>
+<h2 data-number="3.3" id="a-module-from-github"><span class="header-section-number">3.3</span> A module from GitHub</h2>
+<p>    The raw material for the sayings is two word lists, sixty lines each, and they live in this booklet’s repository on GitHub, in <code>examples/motd</code>. Rather than copy them, the configuration pulls them from there with a <code>module</code> block:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">module</span> <span class="st">&quot;sayings&quot;</span> {</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">source</span> <span class="op">=</span> <span class="st">&quot;github.com/BooksByGorgo/opentofu//tasting/examples/motd?ref=main&quot;</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p>A <strong>module</strong> is a directory of configuration with inputs and outputs. The directory you run <code>tofu</code> in is the <strong>root module</strong>; any directory it pulls in with a <code>module</code> block is a <strong>child module</strong>. If a resource is a noun and a configuration is a paragraph, a module is a function: its variables are the parameters, its resources are the body, and its outputs are the return values. Calling one means writing a <code>module</code> block, and the call’s result is the child’s outputs, available as <code>module.NAME.OUTPUT</code>.</p>
+<p>The <code>source</code> says where the directory comes from <span class="citation" data-cites="OTF_ModuleSources">[6]</span>: a GitHub repository, <code>//</code> followed by the path inside it, and <code>?ref=</code> naming the branch, tag, or commit to take. Local paths and the module registry are the other kinds of source, and Chapter 4 uses the first of them. <code>tofu init</code> clones the repository over HTTPS, which for a public repository needs no token and no account, and puts the directory under <code>.terraform/modules</code>:</p>
+<pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ tofu init</b>
+Initializing modules...
+Downloading git::https://github.com/BooksByGorgo/opentofu.git?ref=main for sayings...
+- sayings in .terraform/modules/sayings/tasting/examples/motd
+...</pre>
+<p>Here is what it fetched, <code>examples/motd/main.tf</code>:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># A data-only module: no variables, no resources, four outputs.</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Any configuration can pull it straight from this public repository with</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="co">#   source = &quot;github.com/BooksByGorgo/opentofu//tasting/examples/motd?ref=main&quot;</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="co"># 60 prefixes x 60 suffixes = 3600 sayings, one for every second of the hour.</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Saying number n pairs prefix n / 60 with suffix n % 60.</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="kw">locals</span> {</span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>  prefixes <span class="op">=</span> <span class="bu">split</span>(<span class="st">&quot;\n&quot;</span>, <span class="bu">trimspace</span>(<span class="bu">file</span>(<span class="st">&quot;</span><span class="ss">${</span><span class="va">path.module</span><span class="ss">}</span><span class="st">/prefix.txt&quot;</span>)))</span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>  suffixes <span class="op">=</span> <span class="bu">split</span>(<span class="st">&quot;\n&quot;</span>, <span class="bu">trimspace</span>(<span class="bu">file</span>(<span class="st">&quot;</span><span class="ss">${</span><span class="va">path.module</span><span class="ss">}</span><span class="st">/suffix.txt&quot;</span>)))</span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>  <span class="co"># setproduct pairs every prefix with every suffix, prefixes first:</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>  <span class="co"># [[p0, s0], [p0, s1], ..., [p1, s0], ...]</span></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>  sayings <span class="op">=</span> [</span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> pair <span class="cf">in</span> <span class="bu">setproduct</span>(<span class="va">local</span>.prefixes, <span class="va">local</span>.suffixes) :</span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;</span><span class="ss">${</span><span class="va">pair[0]</span><span class="ss">}</span><span class="st"> </span><span class="ss">${</span><span class="va">pair[1]</span><span class="ss">}</span><span class="st">&quot;</span></span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>  ]</span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a><span class="kw">output</span> <span class="st">&quot;prefixes&quot;</span> {</span>
+<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a>  description <span class="op">=</span> <span class="st">&quot;The 60 sentence beginnings, one per line in prefix.txt.&quot;</span></span>
+<span id="cb3-21"><a href="#cb3-21" aria-hidden="true" tabindex="-1"></a>  value       <span class="op">=</span> <span class="va">local</span>.prefixes</span>
+<span id="cb3-22"><a href="#cb3-22" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb3-23"><a href="#cb3-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-24"><a href="#cb3-24" aria-hidden="true" tabindex="-1"></a><span class="kw">output</span> <span class="st">&quot;suffixes&quot;</span> {</span>
+<span id="cb3-25"><a href="#cb3-25" aria-hidden="true" tabindex="-1"></a>  description <span class="op">=</span> <span class="st">&quot;The 60 sentence endings, one per line in suffix.txt.&quot;</span></span>
+<span id="cb3-26"><a href="#cb3-26" aria-hidden="true" tabindex="-1"></a>  value       <span class="op">=</span> <span class="va">local</span>.suffixes</span>
+<span id="cb3-27"><a href="#cb3-27" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb3-28"><a href="#cb3-28" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-29"><a href="#cb3-29" aria-hidden="true" tabindex="-1"></a><span class="kw">output</span> <span class="st">&quot;sayings&quot;</span> {</span>
+<span id="cb3-30"><a href="#cb3-30" aria-hidden="true" tabindex="-1"></a>  description <span class="op">=</span> <span class="st">&quot;The 3600 sayings, indexed by second of the hour.&quot;</span></span>
+<span id="cb3-31"><a href="#cb3-31" aria-hidden="true" tabindex="-1"></a>  value       <span class="op">=</span> <span class="va">local</span>.sayings</span>
+<span id="cb3-32"><a href="#cb3-32" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb3-33"><a href="#cb3-33" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-34"><a href="#cb3-34" aria-hidden="true" tabindex="-1"></a><span class="kw">output</span> <span class="st">&quot;sql&quot;</span> {</span>
+<span id="cb3-35"><a href="#cb3-35" aria-hidden="true" tabindex="-1"></a>  description <span class="op">=</span> <span class="st">&quot;SQL that creates and fills the sayings table.&quot;</span></span>
+<span id="cb3-36"><a href="#cb3-36" aria-hidden="true" tabindex="-1"></a>  value <span class="op">=</span> <span class="bu">templatefile</span>(<span class="st">&quot;</span><span class="ss">${</span><span class="va">path.module</span><span class="ss">}</span><span class="st">/sayings.sql.tftpl&quot;</span>, {</span>
+<span id="cb3-37"><a href="#cb3-37" aria-hidden="true" tabindex="-1"></a>    sayings <span class="op">=</span> <span class="va">local</span>.sayings</span>
+<span id="cb3-38"><a href="#cb3-38" aria-hidden="true" tabindex="-1"></a>  })</span>
+<span id="cb3-39"><a href="#cb3-39" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-40"><a href="#cb3-40" aria-hidden="true" tabindex="-1"></a>  precondition {</span>
+<span id="cb3-41"><a href="#cb3-41" aria-hidden="true" tabindex="-1"></a>    condition     <span class="op">=</span> <span class="bu">length</span>(<span class="va">local</span>.sayings) <span class="op">==</span> <span class="dv">3600</span></span>
+<span id="cb3-42"><a href="#cb3-42" aria-hidden="true" tabindex="-1"></a>    error_message <span class="op">=</span> <span class="st">&quot;need exactly 3600 sayings, one per second of the hour.&quot;</span></span>
+<span id="cb3-43"><a href="#cb3-43" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb3-44"><a href="#cb3-44" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p>This module has no variables and no resources at all; it is a function with no parameters that returns data. The two <code>locals</code> read the word lists with <code>file</code> and split them into one entry per line; <code>path.module</code> inside a module is the module’s own directory, not the root’s, even when that directory is a checkout under <code>.terraform/modules</code>. The rest of the file is outputs, and outputs are all a caller can see: the two lists, the 3600 sayings that <code>setproduct</code> makes of them (explained next), and the finished SQL, rendered by <code>templatefile</code> (explained in the seed file section) and guarded by a <code>precondition</code> on the output, which is where that assumption belongs. This chapter takes the lists and does the rest itself, to learn the pieces; Chapters 4 and 5 take the finished SQL.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> <code>?ref=main</code> takes whatever is on the branch today, which is fine for a booklet and wrong for anything that must build the same way twice. A module source is code you run, so in real work pin <code>ref</code> to a tag or a commit hash, and move it on purpose.</p>
+</div></div>
+<h2 data-number="3.4" id="the-sayings"><span class="header-section-number">3.4</span> The sayings</h2>
+<p> Writing 3600 sayings by hand is not going to happen. Sixty sentence beginnings (<code>A patient programmer</code>, <code>The wise sysadmin</code>, …) and sixty endings (<code>never blames the compiler.</code>, <code>starts every day with a backup.</code>, …), with every beginning paired with every ending, is 120 lines for 3600 sayings, and the results have the earnest nonsense quality of a real fortune file. This chapter’s configuration lives in a new directory, <code>database</code>, and the module block and the pairing go in <code>sayings.tf</code> there:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># the prefix and suffix lists live in the booklet&#39;s public repository</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="kw">module</span> <span class="st">&quot;sayings&quot;</span> {</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  <span class="kw">source</span> <span class="op">=</span> <span class="st">&quot;github.com/BooksByGorgo/opentofu//tasting/examples/motd?ref=main&quot;</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a><span class="kw">locals</span> {</span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>  <span class="co"># setproduct pairs every prefix with every suffix, prefixes first:</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>  <span class="co"># [[p0, s0], [p0, s1], ..., [p1, s0], ...]</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>  sayings <span class="op">=</span> [</span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> pair <span class="cf">in</span> <span class="bu">setproduct</span>(<span class="kw">module</span>.sayings.prefixes, <span class="kw">module</span>.sayings.suffixes) :</span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;</span><span class="ss">${</span><span class="va">pair[0]</span><span class="ss">}</span><span class="st"> </span><span class="ss">${</span><span class="va">pair[1]</span><span class="ss">}</span><span class="st">&quot;</span></span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>  ]</span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p><code>setproduct</code> returns every combination of its lists as a list of pairs, first list varying slowest. The for expression turns each pair into one string. Saying number <code>n</code> is prefix <code>n / 60</code> with suffix <code>n % 60</code>, so with <code>n = minute * 60 + second</code> the beginning changes every minute and the ending every second.</p>
+<p> When an expression gets this clever, check it. <code>tofu console</code> is an interactive prompt that evaluates expressions against the configuration, and once <code>init</code> has fetched the module it can evaluate these:</p>
+<pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ tofu console</b>
+&gt; length(local.sayings)
+3600
+&gt; local.sayings[0]
+"A patient programmer never blames the compiler."
+&gt; local.sayings[61]
+"The wise sysadmin starts every day with a backup."
+&gt; local.sayings[3599]
+"A brand-new laptop makes tomorrow easier than today."</pre>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> <code>tofu console</code> is the fastest way to learn what a function does or to debug an expression. Type it, see the result, adjust. It can also read resource attributes from the state once you have applied, so <code>docker_container.web.ports</code> will show you exactly what the provider recorded.</p>
+</div></div>
+<h2 data-number="3.5" id="the-seed-file"><span class="header-section-number">3.5</span> The seed file</h2>
+<p>  The database needs SQL, and the SQL is generated from the list with a <strong>template</strong>, <code>sayings.sql.tftpl</code>:</p>
+<pre><code>CREATE TABLE sayings (
+  id     INT PRIMARY KEY,
+  saying VARCHAR(255) NOT NULL
+);
+
+INSERT INTO sayings (id, saying) VALUES
+%{ for i, s in sayings ~}
+  (${i}, &#39;${replace(s, &quot;&#39;&quot;, &quot;&#39;&#39;&quot;)}&#39;)${i &lt; length(sayings) - 1 ? &quot;,&quot; : &quot;;&quot;}
+%{ endfor ~}</code></pre>
+<p>A template is a text file with two kinds of holes. <code>${...}</code> you already know: paste a value. <code>%{ for ... }</code> and <code>%{ endfor }</code> are <strong>directives</strong>: they repeat or choose the text between them. The <code>~</code> on a directive eats the newline after it, so that the loop does not emit a blank line for every iteration. <code>for i, s in sayings</code> gives you the index as well as the element.</p>
+<p>  Two more expressions are hiding in that line. <code>replace(s, "'", "''")</code> doubles any single quote, which is how SQL escapes them; none of the sayings has one, but the template should not break when you add one. <code>cond ? a : b</code> is the <strong>conditional expression</strong>: a comma after every row except the last, which gets the semicolon.</p>
+<p>  The template is rendered by <code>templatefile</code> and written to disk by the <code>local_file</code> resource, in <code>database.tf</code>:</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;local_file&quot;</span> <span class="st">&quot;seed&quot;</span> {</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>  filename <span class="op">=</span> <span class="st">&quot;</span><span class="ss">${</span><span class="va">path.module</span><span class="ss">}</span><span class="st">/seed/001-sayings.sql&quot;</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>  <span class="kw">content</span> <span class="op">=</span> <span class="bu">templatefile</span>(<span class="st">&quot;</span><span class="ss">${</span><span class="va">path.module</span><span class="ss">}</span><span class="st">/sayings.sql.tftpl&quot;</span>, {</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>    sayings <span class="op">=</span> <span class="va">local</span>.sayings</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>  })</span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">lifecycle</span> {</span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>    precondition {</span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>      condition     <span class="op">=</span> <span class="bu">length</span>(<span class="va">local</span>.sayings) <span class="op">==</span> <span class="dv">3600</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>      error_message <span class="op">=</span> <span class="st">&quot;need exactly 3600 sayings, one per second of the hour.&quot;</span></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p><code>templatefile</code> takes the path and a map of the values the template may use; only <code>sayings</code> is visible inside it.</p>
+<p>The <code>precondition</code> inside <code>lifecycle</code> is an assumption made explicit: if it is false, the plan fails with your message, before anything is created. Unlike a <code>check</code>, a failed precondition is an error. Use a precondition for “this configuration makes no sense unless…”, and a check for “did it work”.</p>
+<h2 data-number="3.6" id="the-password"><span class="header-section-number">3.6</span> The password</h2>
+<p>  </p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;random_password&quot;</span> <span class="st">&quot;db&quot;</span> {</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  <span class="bu">length</span>  <span class="op">=</span> <span class="dv">24</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>  special <span class="op">=</span> <span class="va">false</span> <span class="co"># keeps the password safe to paste into a DSN</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p>As the overview said, the value is generated once and remembered in state, so the password is the same on every plan until you replace the resource. That is what you want: a password that is generated once, never typed, and never written into a file you edit.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Wut:</strong> The “random” provider is only random once. The generated value is stored in the state file, and every later run reads it back from there. That makes the state file a secret, and it makes <code>tofu state rm random_password.db</code> the way to force a new password (the next apply generates one and updates everything that references it).</p>
+</div></div>
+<p>The password shows up in the outputs marked as sensitive:</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="kw">output</span> <span class="st">&quot;db_password&quot;</span> {</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>  value     <span class="op">=</span> random_password.db.result</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>  <span class="bu">sensitive</span> <span class="op">=</span> <span class="va">true</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p>A sensitive output is printed as <code>(sensitive value)</code> after apply, and <code>tofu output -raw db_password</code> still gives you the real thing when you ask for it explicitly. Any value derived from a sensitive value is sensitive too, so the container’s environment list is hidden in plans as well.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> <code>sensitive</code> hides values from the terminal, not from the state file. The password is in <code>terraform.tfstate</code> in plain text. This is one more reason state never goes into git and, once anyone else needs it, lives in a backend with access control (Appendix A).</p>
+</div></div>
+<h2 data-number="3.7" id="network-and-volume"><span class="header-section-number">3.7</span> Network and volume</h2>
+<p>  </p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;docker_network&quot;</span> <span class="st">&quot;motd&quot;</span> {</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>  name <span class="op">=</span> <span class="st">&quot;motd&quot;</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;docker_volume&quot;</span> <span class="st">&quot;db_data&quot;</span> {</span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>  name <span class="op">=</span> <span class="st">&quot;motd-db-data&quot;</span></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">lifecycle</span> {</span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>    <span class="co"># the seed only loads into an empty volume, so new seed =&gt; new volume</span></span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>    replace_triggered_by <span class="op">=</span> [local_file.seed]</span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p>Containers on the same user-defined Docker network can reach each other by name, which is how the web server will find the database. The volume holds the database files so that replacing the database container does not lose the data.</p>
+<p><code>replace_triggered_by</code> is the second lifecycle setting in this chapter and it solves a real problem. MySQL runs the seed scripts only when its data directory is empty. If the sayings or the template change, the seed file changes, but a volume full of old data would ignore it. This rule says: whenever <code>local_file.seed</code> is replaced, replace the volume too, and a fresh volume gets the fresh seed.</p>
+<h2 data-number="3.8" id="the-database-container"><span class="header-section-number">3.8</span> The database container</h2>
+<p>  </p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;docker_image&quot;</span> <span class="st">&quot;mysql&quot;</span> {</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>  name <span class="op">=</span> <span class="st">&quot;mysql:8.4&quot;</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;docker_container&quot;</span> <span class="st">&quot;db&quot;</span> {</span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>  name  <span class="op">=</span> <span class="st">&quot;motd-db&quot;</span></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>  image <span class="op">=</span> docker_image.mysql.image_id</span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>  env <span class="op">=</span> [</span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;MYSQL_RANDOM_ROOT_PASSWORD=yes&quot;</span>,</span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;MYSQL_DATABASE=motd&quot;</span>,</span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;MYSQL_USER=motd&quot;</span>,</span>
+<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;MYSQL_PASSWORD=</span><span class="ss">${</span><span class="va">random_password.db.result</span><span class="ss">}</span><span class="st">&quot;</span>,</span>
+<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a>  ]</span>
+<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a>  networks_advanced {</span>
+<span id="cb10-17"><a href="#cb10-17" aria-hidden="true" tabindex="-1"></a>    name    <span class="op">=</span> docker_network.motd.name</span>
+<span id="cb10-18"><a href="#cb10-18" aria-hidden="true" tabindex="-1"></a>    aliases <span class="op">=</span> [<span class="st">&quot;db&quot;</span>]</span>
+<span id="cb10-19"><a href="#cb10-19" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb10-20"><a href="#cb10-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-21"><a href="#cb10-21" aria-hidden="true" tabindex="-1"></a>  volumes {</span>
+<span id="cb10-22"><a href="#cb10-22" aria-hidden="true" tabindex="-1"></a>    volume_name    <span class="op">=</span> docker_volume.db_data.name</span>
+<span id="cb10-23"><a href="#cb10-23" aria-hidden="true" tabindex="-1"></a>    container_path <span class="op">=</span> <span class="st">&quot;/var/lib/mysql&quot;</span></span>
+<span id="cb10-24"><a href="#cb10-24" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb10-25"><a href="#cb10-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-26"><a href="#cb10-26" aria-hidden="true" tabindex="-1"></a>  volumes {</span>
+<span id="cb10-27"><a href="#cb10-27" aria-hidden="true" tabindex="-1"></a>    host_path      <span class="op">=</span> <span class="bu">abspath</span>(<span class="bu">dirname</span>(local_file.seed.filename))</span>
+<span id="cb10-28"><a href="#cb10-28" aria-hidden="true" tabindex="-1"></a>    container_path <span class="op">=</span> <span class="st">&quot;/docker-entrypoint-initdb.d&quot;</span></span>
+<span id="cb10-29"><a href="#cb10-29" aria-hidden="true" tabindex="-1"></a>    read_only      <span class="op">=</span> <span class="va">true</span></span>
+<span id="cb10-30"><a href="#cb10-30" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb10-31"><a href="#cb10-31" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-32"><a href="#cb10-32" aria-hidden="true" tabindex="-1"></a>  healthcheck {</span>
+<span id="cb10-33"><a href="#cb10-33" aria-hidden="true" tabindex="-1"></a>    test     <span class="op">=</span> [<span class="st">&quot;CMD&quot;</span>, <span class="st">&quot;mysqladmin&quot;</span>, <span class="st">&quot;ping&quot;</span>, <span class="st">&quot;-h&quot;</span>, <span class="st">&quot;127.0.0.1&quot;</span>, <span class="st">&quot;--silent&quot;</span>]</span>
+<span id="cb10-34"><a href="#cb10-34" aria-hidden="true" tabindex="-1"></a>    interval <span class="op">=</span> <span class="st">&quot;5s&quot;</span></span>
+<span id="cb10-35"><a href="#cb10-35" aria-hidden="true" tabindex="-1"></a>    timeout  <span class="op">=</span> <span class="st">&quot;3s&quot;</span></span>
+<span id="cb10-36"><a href="#cb10-36" aria-hidden="true" tabindex="-1"></a>    retries  <span class="op">=</span> <span class="dv">3</span></span>
+<span id="cb10-37"><a href="#cb10-37" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb10-38"><a href="#cb10-38" aria-hidden="true" tabindex="-1"></a>  wait         <span class="op">=</span> <span class="va">true</span> <span class="co"># creation finishes when the health check passes</span></span>
+<span id="cb10-39"><a href="#cb10-39" aria-hidden="true" tabindex="-1"></a>  wait_timeout <span class="op">=</span> <span class="dv">180</span></span>
+<span id="cb10-40"><a href="#cb10-40" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-41"><a href="#cb10-41" aria-hidden="true" tabindex="-1"></a>  <span class="at">lifecycle</span> {</span>
+<span id="cb10-42"><a href="#cb10-42" aria-hidden="true" tabindex="-1"></a>    replace_triggered_by <span class="op">=</span> [docker_volume.db_data]</span>
+<span id="cb10-43"><a href="#cb10-43" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb10-44"><a href="#cb10-44" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p>This is the biggest resource so far, and every part earns its place.</p>
+<p>The <code>docker_image</code> without a <code>build</code> block pulls the image from Docker Hub. The environment variables are the MySQL image’s own interface: it creates the database and the user on first start, and it generates a root password you never need.</p>
+<p>The <code>networks_advanced</code> block joins the network and gives the container the alias <code>db</code>, so that the web server can use <code>db</code> as a host name without caring what the container is called.</p>
+<p>Two <code>volumes</code> blocks mount two things: the named volume for the data, and the directory holding the seed file, mounted where the MySQL image looks for initialization scripts.   Docker needs an absolute path for a bind mount, so <code>dirname</code> takes the seed file’s directory and <code>abspath</code> makes it absolute. Referencing <code>local_file.seed.filename</code> also makes sure the file is written before the container starts.</p>
+<p> The <code>healthcheck</code> block defines what “healthy” means, and <code>wait = true</code> makes the provider hold the resource in “Creating” until the health check passes. Pinging <code>127.0.0.1</code> rather than <code>localhost</code> matters: while MySQL is loading seed scripts it runs a temporary server that only listens on a Unix socket, and pinging over TCP fails until the real server is up. So when this resource is “created”, the sayings are loaded and the database is accepting connections.</p>
+<p>The final <code>replace_triggered_by</code> completes the chain: seed file replaced, so volume replaced, so container replaced.</p>
+<h2 data-number="3.9" id="the-web-server"><span class="header-section-number">3.9</span> The web server</h2>
+<p>The Go program grows a database lookup. Copy <code>app</code> from <code>webserver</code> into <code>database</code>; the changed <code>app/main.go</code>:</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;database/sql&quot;</span></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;log&quot;</span></span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;net/http&quot;</span></span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;os&quot;</span></span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;time&quot;</span></span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a>    _ <span class="st">&quot;time/tzdata&quot;</span> <span class="co">// zone database, since a scratch image has none</span></span>
+<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a>    _ <span class="st">&quot;github.com/go-sql-driver/mysql&quot;</span></span>
+<span id="cb11-13"><a href="#cb11-13" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb11-14"><a href="#cb11-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-15"><a href="#cb11-15" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> db <span class="op">*</span>sql<span class="op">.</span>DB</span>
+<span id="cb11-16"><a href="#cb11-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-17"><a href="#cb11-17" aria-hidden="true" tabindex="-1"></a><span class="co">// saying looks up the message for the current second of the hour.</span></span>
+<span id="cb11-18"><a href="#cb11-18" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> saying<span class="op">(</span>w http<span class="op">.</span>ResponseWriter<span class="op">,</span> r <span class="op">*</span>http<span class="op">.</span>Request<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb11-19"><a href="#cb11-19" aria-hidden="true" tabindex="-1"></a>    now <span class="op">:=</span> time<span class="op">.</span>Now<span class="op">()</span></span>
+<span id="cb11-20"><a href="#cb11-20" aria-hidden="true" tabindex="-1"></a>    key <span class="op">:=</span> now<span class="op">.</span>Minute<span class="op">()*</span><span class="dv">60</span> <span class="op">+</span> now<span class="op">.</span>Second<span class="op">()</span></span>
+<span id="cb11-21"><a href="#cb11-21" aria-hidden="true" tabindex="-1"></a>    <span class="kw">var</span> text <span class="dt">string</span></span>
+<span id="cb11-22"><a href="#cb11-22" aria-hidden="true" tabindex="-1"></a>    err <span class="op">:=</span> db<span class="op">.</span>QueryRow<span class="op">(</span><span class="st">&quot;SELECT saying FROM sayings WHERE id = ?&quot;</span><span class="op">,</span> key<span class="op">).</span>Scan<span class="op">(&amp;</span>text<span class="op">)</span></span>
+<span id="cb11-23"><a href="#cb11-23" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb11-24"><a href="#cb11-24" aria-hidden="true" tabindex="-1"></a>        log<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;lookup %d: %v&quot;</span><span class="op">,</span> key<span class="op">,</span> err<span class="op">)</span></span>
+<span id="cb11-25"><a href="#cb11-25" aria-hidden="true" tabindex="-1"></a>        http<span class="op">.</span>Error<span class="op">(</span>w<span class="op">,</span> <span class="st">&quot;no saying right now, try again&quot;</span><span class="op">,</span> http<span class="op">.</span>StatusServiceUnavailable<span class="op">)</span></span>
+<span id="cb11-26"><a href="#cb11-26" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span></span>
+<span id="cb11-27"><a href="#cb11-27" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb11-28"><a href="#cb11-28" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Fprintf<span class="op">(</span>w<span class="op">,</span> <span class="st">&quot;[%s] %s</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> now<span class="op">.</span>Format<span class="op">(</span><span class="st">&quot;15:04:05&quot;</span><span class="op">),</span> text<span class="op">)</span></span>
+<span id="cb11-29"><a href="#cb11-29" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb11-30"><a href="#cb11-30" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-31"><a href="#cb11-31" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb11-32"><a href="#cb11-32" aria-hidden="true" tabindex="-1"></a>    addr <span class="op">:=</span> <span class="st">&quot;:8080&quot;</span></span>
+<span id="cb11-33"><a href="#cb11-33" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> port <span class="op">:=</span> os<span class="op">.</span>Getenv<span class="op">(</span><span class="st">&quot;PORT&quot;</span><span class="op">);</span> port <span class="op">!=</span> <span class="st">&quot;&quot;</span> <span class="op">{</span></span>
+<span id="cb11-34"><a href="#cb11-34" aria-hidden="true" tabindex="-1"></a>        addr <span class="op">=</span> <span class="st">&quot;:&quot;</span> <span class="op">+</span> port</span>
+<span id="cb11-35"><a href="#cb11-35" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb11-36"><a href="#cb11-36" aria-hidden="true" tabindex="-1"></a>    <span class="kw">var</span> err <span class="dt">error</span></span>
+<span id="cb11-37"><a href="#cb11-37" aria-hidden="true" tabindex="-1"></a>    db<span class="op">,</span> err <span class="op">=</span> sql<span class="op">.</span>Open<span class="op">(</span><span class="st">&quot;mysql&quot;</span><span class="op">,</span> os<span class="op">.</span>Getenv<span class="op">(</span><span class="st">&quot;DB_DSN&quot;</span><span class="op">))</span> <span class="co">// connects lazily</span></span>
+<span id="cb11-38"><a href="#cb11-38" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb11-39"><a href="#cb11-39" aria-hidden="true" tabindex="-1"></a>        log<span class="op">.</span>Fatal<span class="op">(</span>err<span class="op">)</span></span>
+<span id="cb11-40"><a href="#cb11-40" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb11-41"><a href="#cb11-41" aria-hidden="true" tabindex="-1"></a>    db<span class="op">.</span>SetConnMaxLifetime<span class="op">(</span><span class="dv">3</span> <span class="op">*</span> time<span class="op">.</span>Minute<span class="op">)</span></span>
+<span id="cb11-42"><a href="#cb11-42" aria-hidden="true" tabindex="-1"></a>    http<span class="op">.</span>HandleFunc<span class="op">(</span><span class="st">&quot;/&quot;</span><span class="op">,</span> saying<span class="op">)</span></span>
+<span id="cb11-43"><a href="#cb11-43" aria-hidden="true" tabindex="-1"></a>    log<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;listening on %s&quot;</span><span class="op">,</span> addr<span class="op">)</span></span>
+<span id="cb11-44"><a href="#cb11-44" aria-hidden="true" tabindex="-1"></a>    log<span class="op">.</span>Fatal<span class="op">(</span>http<span class="op">.</span>ListenAndServe<span class="op">(</span>addr<span class="op">,</span> <span class="ot">nil</span><span class="op">))</span></span>
+<span id="cb11-45"><a href="#cb11-45" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Two details are there because of the container. <code>sql.Open</code> does not connect until the first query, so the server starts even if the database is not ready, and answers 503 until it is. And <code>time/tzdata</code> embeds the time zone database, because the <code>scratch</code> image has no <code>/usr/share/zoneinfo</code>, and without it <code>TZ=America/Los_Angeles</code> silently means UTC.</p>
+<p>Add the driver with <code>go get github.com/go-sql-driver/mysql</code>, which updates <code>go.mod</code> and creates <code>go.sum</code>; change the Dockerfile’s <code>COPY go.mod ./</code> to <code>COPY go.mod go.sum ./</code>.</p>
+<p>The container, in <code>web.tf</code>, reuses the image build from Chapter 2 (now tagged <code>motd:ch3</code>) and adds an environment and a network:</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;docker_container&quot;</span> <span class="st">&quot;web&quot;</span> {</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>  name  <span class="op">=</span> <span class="st">&quot;motd-web&quot;</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>  image <span class="op">=</span> docker_image.web.image_id</span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>  env <span class="op">=</span> [</span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;DB_DSN=motd:</span><span class="ss">${</span><span class="va">random_password.db.result</span><span class="ss">}</span><span class="st">@tcp(db:3306)/motd&quot;</span>,</span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;TZ=</span><span class="ss">${</span><span class="va">var.timezone</span><span class="ss">}</span><span class="st">&quot;</span>,</span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>  ]</span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>  networks_advanced {</span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>    name <span class="op">=</span> docker_network.motd.name</span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a>  ports {</span>
+<span id="cb12-15"><a href="#cb12-15" aria-hidden="true" tabindex="-1"></a>    internal <span class="op">=</span> <span class="dv">8080</span></span>
+<span id="cb12-16"><a href="#cb12-16" aria-hidden="true" tabindex="-1"></a>    external <span class="op">=</span> <span class="va">var</span>.port</span>
+<span id="cb12-17"><a href="#cb12-17" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb12-18"><a href="#cb12-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-19"><a href="#cb12-19" aria-hidden="true" tabindex="-1"></a>  <span class="at">depends_on</span> <span class="op">=</span> [docker_container.db]</span>
+<span id="cb12-20"><a href="#cb12-20" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p>The DSN names the database <code>db</code>, which is the alias on the shared network, and pastes in the generated password. <code>timezone</code> is a new variable with the default <code>America/Los_Angeles</code>; set it to yours.</p>
+<p> <code>depends_on</code> is an <strong>explicit dependency</strong>. Nothing in this block references the database container, so the tool would happily start the web server first. <code>depends_on</code> says: wait for that one anyway. Use it only when there is no attribute you can reference, because a reference is both a dependency and documentation of why.</p>
+<p>The check follows the same pattern as Chapter 2 with a stricter assertion:</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>  assert {</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>    condition <span class="op">=</span> <span class="bu">can</span>(<span class="bu">regex</span>(</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;^\\[\\d\\d:\\d\\d:\\d\\d\\] .+&quot;</span>, <span class="kw">data</span>.http.web.response_body</span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>    ))</span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>    error_message <span class="op">=</span> <span class="st">&quot;not a saying: </span><span class="ss">${</span><span class="va">data.http.web.response_body</span><span class="ss">}</span><span class="st">&quot;</span></span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>  }</span></code></pre></div>
+<p>  <code>regex</code> returns the match or raises an error when there is none, and <code>can</code> turns “raises an error” into <code>false</code>. <code>can(regex(...))</code> is the idiom for “does this match”. Note the doubled backslashes: the string is parsed once by the configuration language and once by the regular expression engine.</p>
+<h2 data-number="3.10" id="running-it"><span class="header-section-number">3.10</span> Running it</h2>
+<p>From the <code>database</code> directory:</p>
+<pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ tofu init</b>
+...
+<b>$ tofu apply</b>
+random_password.db: Creation complete after 0s [id=none]
+docker_network.motd: Creation complete after 3s [id=58234eb2ca78...]
+local_file.seed: Creation complete after 9s [id=ed5371baf622...]
+docker_volume.db_data: Creation complete after 0s [id=motd-db-data]
+docker_image.web: Creation complete after 17s [id=sha256:9c956a29...motd:ch3]
+docker_image.mysql: Creation complete after 41s [id=sha256:bced325a...mysql:8.4]
+docker_container.db: Creating...
+docker_container.db: Still creating... [10s elapsed]
+docker_container.db: Creation complete after 18s [id=c6fa127e59d8...]
+docker_container.web: Creation complete after 1s [id=794f91260fc7...]
+
+Apply complete! Resources: 8 added, 0 changed, 0 destroyed.</pre>
+<p>Read the order. Everything with no dependencies started at once; the database waited for the network, the volume, and the seed; it then spent eighteen seconds loading 3600 rows before it counted as created; and only then did the web server start. None of that order was written down anywhere.</p>
+<pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ curl localhost:8080/; sleep 1; curl localhost:8080/</b>
+[09:27:12] A well-named variable knows that naming things is harder.
+[09:27:13] A well-named variable counts from zero.</pre>
+<p>Minute 27 is prefix 27, and the suffix walks along with the seconds.</p>
+<p>Now change the seed: put a comment line such as <code>-- version 2</code> at the top of the template, and plan:</p>
+<pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ tofu plan</b>
+  # docker_container.db will be replaced due to changes in replace_triggered_by
+  # docker_volume.db_data will be replaced due to changes in replace_triggered_by
+  # local_file.seed must be replaced
+
+Plan: 3 to add, 0 to change, 3 to destroy.</pre>
+<p>The seed, the volume, and the database are rebuilt; the web server, its image, the network, and the password are untouched.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> A container that was started by hand with <code>docker run --name motd-db</code> makes apply fail with <code>Conflict. The container name "/motd-db" is already in use</code>. The tool only knows about containers it created. Remove the stray one, or <code>tofu import</code> it (Appendix A), and apply again.</p>
+</div></div>
+<h2 data-number="3.11" id="key-points"><span class="header-section-number">3.11</span> Key Points</h2>
+<ul>
+<li>A module is a directory of configuration called with a <code>module</code> block; its outputs are what the caller sees, and a module with no resources is still a useful function.</li>
+<li>A module <code>source</code> can be a public GitHub repository, with <code>//</code> for the path inside it and <code>?ref=</code> to pin what you get.</li>
+<li><code>setproduct</code> and for expressions generate data; <code>templatefile</code> with <code>%{ for }</code> directives renders it; <code>local_file</code> writes it.</li>
+<li><code>precondition</code> blocks turn assumptions into errors before anything is created; <code>check</code> blocks turn results into warnings after.</li>
+<li>The <code>random</code> provider generates a value once and keeps it in state. Mark such values <code>sensitive</code>, and remember that state holds them in plain text.</li>
+<li>Containers on a user-defined network find each other by name or alias. Named volumes keep data across container replacement.</li>
+<li><code>replace_triggered_by</code> chains replacements that the provider cannot see, like “new seed, so new volume”.</li>
+<li>A <code>healthcheck</code> plus <code>wait = true</code> makes “created” mean “ready”, which is what everything downstream needs.</li>
+<li><code>depends_on</code> orders resources that do not reference each other.</li>
+<li>Errors in expressions can be caught with <code>can()</code>.</li>
+</ul>
+<h2 data-number="3.12" id="new-syntax"><span class="header-section-number">3.12</span> New Syntax</h2>
+<table>
+<colgroup>
+<col style="width: 55%" />
+<col style="width: 44%" />
+</colgroup>
+<thead>
+<tr>
+<th style="text-align: left;">Syntax</th>
+<th style="text-align: left;">What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>module "NAME" { source = "github.com/OWNER/REPO//DIR?ref=REF" }</code></td>
+<td style="text-align: left;">Pull a module from a GitHub repository</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>module.NAME.OUTPUT</code></td>
+<td style="text-align: left;">Read a module output</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>setproduct(a, b)</code></td>
+<td style="text-align: left;">Every pair from two lists</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>templatefile(path, { vars })</code></td>
+<td style="text-align: left;">Render a template with the given values</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>%{ for i, x in list ~} ... %{ endfor ~}</code></td>
+<td style="text-align: left;">Template loop directive; <code>~</code> eats the newline</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>cond ? a : b</code></td>
+<td style="text-align: left;">Conditional expression</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>replace</code>, <code>abspath</code>, <code>dirname</code>, <code>regex</code>, <code>can</code></td>
+<td style="text-align: left;">More built-in functions</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>lifecycle { precondition { } }</code></td>
+<td style="text-align: left;">An assumption that fails the plan when false</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>lifecycle { replace_triggered_by = [ ] }</code></td>
+<td style="text-align: left;">Replace this when those are replaced</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>sensitive = true</code></td>
+<td style="text-align: left;">Hide an output or variable from the terminal</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>depends_on = [ ]</code></td>
+<td style="text-align: left;">Explicit ordering without a reference</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>healthcheck { }</code> with <code>wait = true</code></td>
+<td style="text-align: left;">Creation completes when the container is healthy</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>tofu console</code></td>
+<td style="text-align: left;">Evaluate expressions interactively</td>
+</tr>
+</tbody>
+</table>
+<h2 data-number="3.13" id="try-it"><span class="header-section-number">3.13</span> Try It</h2>
+<ul>
+<li>Change <code>?ref=main</code> to the hash of a commit in the booklet’s repository, run <code>tofu init</code>, and see what <code>.terraform/modules/modules.json</code> records.</li>
+<li>Replace the generated sayings with real ones from a fortune file: on many Linux systems there is one at <code>/usr/share/games/fortunes/fortunes</code>, with entries separated by <code>%</code>. You need exactly 3600, so decide what to do when there are too few or too many.</li>
+<li>Add a <code>/healthz</code> endpoint that runs <code>db.Ping()</code>, and point the check at it.</li>
+<li>Change <code>timezone</code> to <code>UTC</code> and apply. Which resources change, and why does the database not?</li>
+<li>Use the <code>petoju/mysql</code> provider to create a second, read-only user for the web server, so that the user created by the image’s environment variables is only used for setup.</li>
+<li>Change <code>special = false</code> to <code>special = true</code> on the password and find out what breaks.</li>
+<li>Write the seed with <code>%{ if }</code> so that ids above 3599 are skipped, then add a 3601st saying and confirm the precondition catches it first.</li>
+</ul>
+<h2 data-number="3.14" id="exercises"><span class="header-section-number">3.14</span> Exercises</h2>
+<ol type="1">
+<li><p><strong>Think about it:</strong> The database container has <code>wait = true</code> and the web container has <code>depends_on = [docker_container.db]</code>. What would go wrong if you removed only <code>wait</code>? What if you removed only <code>depends_on</code>?</p></li>
+<li><p><strong>What does this do?</strong> What does the template below produce for <code>names = ["a", "b", "c"]</code>?</p>
+<pre><code>%{ for i, n in names ~}
+${i}:${n}${i &lt; length(names) - 1 ? &quot;,&quot; : &quot;&quot;}
+%{ endfor ~}</code></pre></li>
+<li><p><strong>Calculation:</strong> At 14:05:09 local time, which saying does the server return, as a prefix index and a suffix index? Which second of which minute returns <code>local.sayings[3599]</code>?</p></li>
+<li><p><strong>Where is the bug?</strong></p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;docker_container&quot;</span> <span class="st">&quot;db&quot;</span> {</span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>  name  <span class="op">=</span> <span class="st">&quot;motd-db&quot;</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>  image <span class="op">=</span> docker_image.mysql.image_id</span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>  volumes {</span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>    host_path      <span class="op">=</span> <span class="st">&quot;./seed&quot;</span></span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>    container_path <span class="op">=</span> <span class="st">&quot;/docker-entrypoint-initdb.d&quot;</span></span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div></li>
+<li><p><strong>Where is the bug?</strong></p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="kw">output</span> <span class="st">&quot;dsn&quot;</span> {</span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>  value <span class="op">=</span> <span class="st">&quot;motd:</span><span class="ss">${</span><span class="va">random_password.db.result</span><span class="ss">}</span><span class="st">@tcp(db:3306)/motd&quot;</span></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div></li>
+<li><p><strong>Write a configuration</strong> that adds a second table, <code>visits</code>, seeded from a template with one row per weekday, and a second <code>check</code> that queries the database through <code>docker exec</code> in a <code>terraform_data</code> provisioner. Decide whether the provisioner or an <code>http</code> data source is the better tool, and say why.</p></li>
+</ol>
+<h1 class="unnumbered" id="references">References</h1>
+<div id="refs" class="references csl-bib-body" data-entry-spacing="0" role="list">
+<div id="ref-RandomProviderDocs" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[1] </div><div class="csl-right-inline">HashiCorp, <span>“<span>Terraform</span> provider for random: documentation.”</span> 2026. Available: <a href="https://github.com/hashicorp/terraform-provider-random/blob/main/docs/index.md">https://github.com/hashicorp/terraform-provider-random/blob/main/docs/index.md</a></div>
+</div>
+<div id="ref-LocalProviderDocs" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[2] </div><div class="csl-right-inline">HashiCorp, <span>“<span>Terraform</span> provider for local: documentation.”</span> 2026. Available: <a href="https://github.com/hashicorp/terraform-provider-local/blob/main/docs/index.md">https://github.com/hashicorp/terraform-provider-local/blob/main/docs/index.md</a></div>
+</div>
+<div id="ref-LocalFile" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[3] </div><div class="csl-right-inline">HashiCorp, <span>“<span>Terraform</span> provider for local: local_file.”</span> 2026. Available: <a href="https://github.com/hashicorp/terraform-provider-local/blob/main/docs/resources/file.md">https://github.com/hashicorp/terraform-provider-local/blob/main/docs/resources/file.md</a></div>
+</div>
+<div id="ref-OTF_Lifecycle" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[4] </div><div class="csl-right-inline">OpenTofu Project, <span>“The lifecycle meta-argument.”</span> 2026. Available: <a href="https://opentofu.org/docs/language/meta-arguments/lifecycle/">https://opentofu.org/docs/language/meta-arguments/lifecycle/</a></div>
+</div>
+<div id="ref-OTF_CustomConditions" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[5] </div><div class="csl-right-inline">OpenTofu Project, <span>“Custom condition checks.”</span> 2026. Available: <a href="https://opentofu.org/docs/language/expressions/custom-conditions/">https://opentofu.org/docs/language/expressions/custom-conditions/</a></div>
+</div>
+<div id="ref-OTF_ModuleSources" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[6] </div><div class="csl-right-inline">OpenTofu Project, <span>“Module sources.”</span> 2026. Available: <a href="https://opentofu.org/docs/language/modules/sources/">https://opentofu.org/docs/language/modules/sources/</a></div>
+</div>
+</div>
+
+{% endraw %}

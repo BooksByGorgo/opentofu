@@ -1,0 +1,581 @@
+---
+layout: default
+title: "4. Kubernetes"
+parent: "Gorgo Tasting OpenTofu and Terraform"
+nav_order: 4
+---
+
+{% raw %}
+<h1 data-number="4" id="kubernetes"><span class="header-section-number">4</span> Kubernetes</h1>
+<p><strong>The need.</strong> A configuration that has grown past a screenful needs the same thing a program does at that size: functions. Groups of resources that belong together should be defined once, take parameters, return values, and be called from more than one place. Some parameters are optional and turn whole blocks on or off. And as the number of objects grows, the tool needs a reliable signal that something changed, so that an updated artifact becomes a visible plan line and not a silent no-op.</p>
+<p><strong>Why it matters.</strong> Modules are how a configuration is reused across environments instead of copied, and how a team divides responsibility: the root decides where things go, a module decides what goes there. Optional blocks are what let one module serve callers with different needs. A content-addressed name turns “rebuild” into a change the tool can plan, which is the difference between a rollout and a stale deployment.</p>
+<p><strong>Why it is hard.</strong> A module has to be general enough to reuse and specific enough to stay simple, and nested blocks cannot be made conditional without new syntax. Providers are configured in one place and used in another, which is a rule that has to be learned. Objects depend on each other by name, images have to reach the cluster, storage binds lazily, and readiness has to be defined before the tool can wait for it.</p>
+<p><strong>The strategy.</strong> Write an application module with variables, outputs, and <code>dynamic</code> blocks for its optional parts, called from a root module that supplies the providers, the way Chapter 3 called the sayings module. Name the image by the hash of its source so that a rebuild changes the deployment. Let readiness probes sequence the rollout, the same idea as the health check in Chapter 3. The example is the sayings server deployed to a local Kubernetes cluster from <code>kind</code>, as a namespace, a secret, a config map, a volume claim, two deployments, and two services.</p>
+<h2 data-number="4.1" id="the-kubernetes-provider"><span class="header-section-number">4.1</span> The Kubernetes provider</h2>
+<p> The configuration in <code>kubernetes</code> swaps Chapter 3’s <code>local</code> provider for the Kubernetes provider, since the seed goes into a config map now rather than a file; <code>versions.tf</code>:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">terraform</span> {</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">required_version</span> <span class="op">=</span> <span class="st">&quot;&gt;= 1.6&quot;</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  <span class="kw">required_providers</span> {</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    docker <span class="op">=</span> {</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>      <span class="kw">source</span>  <span class="op">=</span> <span class="st">&quot;kreuzwerker/docker&quot;</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>      version <span class="op">=</span> <span class="st">&quot;~&gt; 3.0&quot;</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    kubernetes <span class="op">=</span> {</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>      <span class="kw">source</span>  <span class="op">=</span> <span class="st">&quot;hashicorp/kubernetes&quot;</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>      version <span class="op">=</span> <span class="st">&quot;~&gt; 2.35&quot;</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>    random <span class="op">=</span> {</span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>      <span class="kw">source</span>  <span class="op">=</span> <span class="st">&quot;hashicorp/random&quot;</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>      version <span class="op">=</span> <span class="st">&quot;~&gt; 3.6&quot;</span></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>    http <span class="op">=</span> {</span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>      <span class="kw">source</span>  <span class="op">=</span> <span class="st">&quot;hashicorp/http&quot;</span></span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>      version <span class="op">=</span> <span class="st">&quot;~&gt; 3.4&quot;</span></span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a><span class="kw">provider</span> <span class="st">&quot;docker&quot;</span> {}</span>
+<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a><span class="kw">provider</span> <span class="st">&quot;kubernetes&quot;</span> {</span>
+<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a>  config_path    <span class="op">=</span> <span class="st">&quot;~/.kube/config&quot;</span></span>
+<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a>  config_context <span class="op">=</span> <span class="st">&quot;kind-motd&quot;</span></span>
+<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p>The Kubernetes provider has a resource type for every kind of Kubernetes object, named after it <span class="citation" data-cites="K8sProviderDocs">[1]</span>. This chapter uses six: <code>kubernetes_namespace_v1</code>, <code>kubernetes_secret_v1</code>, <code>kubernetes_config_map_v1</code>, <code>kubernetes_persistent_volume_claim_v1</code>, <code>kubernetes_deployment_v1</code>, and <code>kubernetes_service_v1</code>. The <code>_v1</code> suffix picks the newer implementation of each, which follows the Kubernetes API more strictly; use those for anything new. Every one of them has a <code>metadata</code> block for the name, namespace, and labels, and most have a <code>spec</code> block whose contents mirror the YAML you would otherwise write, so if you know the YAML you know the arguments, and the provider’s documentation reads like a translation table.</p>
+<p>Three things about how the provider behaves matter here. It waits: a deployment counts as created when its rollout completes and a volume claim when it is bound, and a <code>timeouts</code> block on the resource says how long to wait, since <code>timeouts</code> is defined by the provider rather than by the tool <span class="citation" data-cites="K8sProviderDeployment">[2]</span>. Its <code>provider</code> block points at a cluster through a kubeconfig file and a context name, so the same configuration can target another cluster by changing two lines. And it cannot put images into a cluster; the cluster pulls them, which is why getting the image there needs a step of its own.</p>
+<h2 data-number="4.2" id="a-cluster-to-deploy-to"><span class="header-section-number">4.2</span> A cluster to deploy to</h2>
+<p>  <code>kind</code> runs a Kubernetes cluster inside Docker containers. This chapter’s configuration goes in <code>kubernetes</code>, with the modules in a sibling directory, <code>modules</code>. Install <code>kind</code> and <code>kubectl</code> (Chapter 0 has the commands for each system), then create a cluster from <code>kubernetes/kind-config.yaml</code>:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># a one-node cluster whose NodePort 30080 is reachable as localhost:8080</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="fu">kind</span><span class="kw">:</span><span class="at"> Cluster</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="fu">apiVersion</span><span class="kw">:</span><span class="at"> kind.x-k8s.io/v1alpha4</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="fu">nodes</span><span class="kw">:</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">role</span><span class="kw">:</span><span class="at"> control-plane</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">extraPortMappings</span><span class="kw">:</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="kw">-</span><span class="at"> </span><span class="fu">containerPort</span><span class="kw">:</span><span class="at"> </span><span class="dv">30080</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="at">        </span><span class="fu">hostPort</span><span class="kw">:</span><span class="at"> </span><span class="dv">8080</span></span></code></pre></div>
+<pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ kind create cluster --name motd --config kind-config.yaml</b>
+<b>$ kubectl cluster-info --context kind-motd</b></pre>
+<p>The port mapping is how you will reach the service from the browser: the cluster’s node port 30080 appears on your machine as port 8080.</p>
+<p>Why is the cluster not created by the configuration? It could be, with a provider for <code>kind</code>. But a provider has to talk to the cluster when planning the objects inside it, so the cluster has to exist before the plan. Things with different lifecycles belong in different configurations, and “the cluster” and “what runs on it” have very different lifecycles. Chapter 5 uses the same split between infrastructure and application.</p>
+<h2 data-number="4.3" id="modules"><span class="header-section-number">4.3</span> Modules</h2>
+<p> Chapter 3 read a module and called it: a directory of configuration with outputs, pulled from GitHub with a <code>module</code> block. That module was a function with no parameters. This chapter writes one with parameters, and the analogy carries: variables are its parameters, resources are its body, and outputs are its return values.</p>
+<p>The root module in <code>kubernetes</code> still calls the sayings module from GitHub, for its finished SQL this time:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">module</span> <span class="st">&quot;sayings&quot;</span> {</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">source</span> <span class="op">=</span> <span class="st">&quot;github.com/BooksByGorgo/opentofu//tasting/examples/motd?ref=main&quot;</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p> The application module will be called the same way, with a local path as its <code>source</code>: <code>../modules/motd-k8s</code>, a directory next to <code>kubernetes</code>. After adding or changing a <code>module</code> block you run <code>tofu init</code> again, which is how modules get installed even when they are just a directory away.</p>
+<p>  Two pieces of syntax make a module flexible without making it complicated, and both appear in the application module. A variable with <code>default = null</code> is optional: <code>null</code> means “not set”, and the module can test for it with <code>== null</code>. When an optional value should turn a whole nested block on or off, a <code>dynamic "NAME"</code> block generates zero or more <code>NAME</code> blocks from a collection: one per element of its <code>for_each</code>, each with the body of its <code>content</code>, and the element available inside as <code>NAME.value</code>. Think of it as a for loop that emits blocks instead of values. With a collection that is empty when the variable is null and has one element otherwise, it is the idiom for an optional block.</p>
+<h2 data-number="4.4" id="the-application-module"><span class="header-section-number">4.4</span> The application module</h2>
+<p> The application module in <code>modules/motd-k8s</code> is the bulk of the chapter. Its <code>variables.tf</code> is its signature:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">variable</span> <span class="st">&quot;namespace&quot;</span> {</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  type        <span class="op">=</span> <span class="dt">string</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  description <span class="op">=</span> <span class="st">&quot;Namespace that holds everything.&quot;</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>  default     <span class="op">=</span> <span class="st">&quot;motd&quot;</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="kw">variable</span> <span class="st">&quot;image&quot;</span> {</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>  type        <span class="op">=</span> <span class="dt">string</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>  description <span class="op">=</span> <span class="st">&quot;Web server image, e.g. motd:abc123.&quot;</span></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a><span class="kw">variable</span> <span class="st">&quot;image_pull_secret&quot;</span> {</span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>  type        <span class="op">=</span> <span class="dt">string</span></span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>  description <span class="op">=</span> <span class="st">&quot;Name of a registry pull secret in the namespace, if the image needs one.&quot;</span></span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>  default     <span class="op">=</span> <span class="va">null</span></span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a><span class="kw">variable</span> <span class="st">&quot;seed_sql&quot;</span> {</span>
+<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a>  type        <span class="op">=</span> <span class="dt">string</span></span>
+<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a>  description <span class="op">=</span> <span class="st">&quot;SQL that creates and fills the sayings table.&quot;</span></span>
+<span id="cb4-21"><a href="#cb4-21" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb4-22"><a href="#cb4-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-23"><a href="#cb4-23" aria-hidden="true" tabindex="-1"></a><span class="kw">variable</span> <span class="st">&quot;db_password&quot;</span> {</span>
+<span id="cb4-24"><a href="#cb4-24" aria-hidden="true" tabindex="-1"></a>  type        <span class="op">=</span> <span class="dt">string</span></span>
+<span id="cb4-25"><a href="#cb4-25" aria-hidden="true" tabindex="-1"></a>  description <span class="op">=</span> <span class="st">&quot;Password for the motd database user.&quot;</span></span>
+<span id="cb4-26"><a href="#cb4-26" aria-hidden="true" tabindex="-1"></a>  <span class="bu">sensitive</span>   <span class="op">=</span> <span class="va">true</span></span>
+<span id="cb4-27"><a href="#cb4-27" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb4-28"><a href="#cb4-28" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-29"><a href="#cb4-29" aria-hidden="true" tabindex="-1"></a><span class="kw">variable</span> <span class="st">&quot;timezone&quot;</span> {</span>
+<span id="cb4-30"><a href="#cb4-30" aria-hidden="true" tabindex="-1"></a>  type        <span class="op">=</span> <span class="dt">string</span></span>
+<span id="cb4-31"><a href="#cb4-31" aria-hidden="true" tabindex="-1"></a>  description <span class="op">=</span> <span class="st">&quot;Time zone the server uses to pick the saying of the second.&quot;</span></span>
+<span id="cb4-32"><a href="#cb4-32" aria-hidden="true" tabindex="-1"></a>  default     <span class="op">=</span> <span class="st">&quot;America/Los_Angeles&quot;</span></span>
+<span id="cb4-33"><a href="#cb4-33" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb4-34"><a href="#cb4-34" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-35"><a href="#cb4-35" aria-hidden="true" tabindex="-1"></a><span class="kw">variable</span> <span class="st">&quot;node_port&quot;</span> {</span>
+<span id="cb4-36"><a href="#cb4-36" aria-hidden="true" tabindex="-1"></a>  type        <span class="op">=</span> <span class="dt">number</span></span>
+<span id="cb4-37"><a href="#cb4-37" aria-hidden="true" tabindex="-1"></a>  description <span class="op">=</span> <span class="st">&quot;Publish the web server on this NodePort; null means ClusterIP only.&quot;</span></span>
+<span id="cb4-38"><a href="#cb4-38" aria-hidden="true" tabindex="-1"></a>  default     <span class="op">=</span> <span class="va">null</span></span>
+<span id="cb4-39"><a href="#cb4-39" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p> Two variables default to <code>null</code>, the optional-variable idiom from the modules section. The module will do something different when they are set, and that is the module author’s way of offering an optional feature without making every caller think about it. Every variable has a description, because a module’s variables are its documentation.</p>
+<h3 data-number="4.4.1" id="namespace-secret-config-map"><span class="header-section-number">4.4.1</span> Namespace, secret, config map</h3>
+<p><code>main.tf</code> opens with the provider requirement and the first three objects:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">terraform</span> {</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">required_providers</span> {</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>    kubernetes <span class="op">=</span> {</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>      <span class="kw">source</span> <span class="op">=</span> <span class="st">&quot;hashicorp/kubernetes&quot;</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;kubernetes_namespace_v1&quot;</span> <span class="st">&quot;motd&quot;</span> {</span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>  metadata {</span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>    name <span class="op">=</span> <span class="va">var</span>.namespace</span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a><span class="kw">locals</span> {</span>
+<span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a>  ns <span class="op">=</span> kubernetes_namespace_v1.motd.metadata[<span class="dv">0</span>].name</span>
+<span id="cb5-17"><a href="#cb5-17" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb5-18"><a href="#cb5-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-19"><a href="#cb5-19" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;kubernetes_secret_v1&quot;</span> <span class="st">&quot;db&quot;</span> {</span>
+<span id="cb5-20"><a href="#cb5-20" aria-hidden="true" tabindex="-1"></a>  metadata {</span>
+<span id="cb5-21"><a href="#cb5-21" aria-hidden="true" tabindex="-1"></a>    name      <span class="op">=</span> <span class="st">&quot;db&quot;</span></span>
+<span id="cb5-22"><a href="#cb5-22" aria-hidden="true" tabindex="-1"></a>    namespace <span class="op">=</span> <span class="va">local</span>.ns</span>
+<span id="cb5-23"><a href="#cb5-23" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb5-24"><a href="#cb5-24" aria-hidden="true" tabindex="-1"></a>  <span class="kw">data</span> <span class="op">=</span> {</span>
+<span id="cb5-25"><a href="#cb5-25" aria-hidden="true" tabindex="-1"></a>    password <span class="op">=</span> <span class="va">var</span>.db_password</span>
+<span id="cb5-26"><a href="#cb5-26" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb5-27"><a href="#cb5-27" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb5-28"><a href="#cb5-28" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-29"><a href="#cb5-29" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;kubernetes_config_map_v1&quot;</span> <span class="st">&quot;seed&quot;</span> {</span>
+<span id="cb5-30"><a href="#cb5-30" aria-hidden="true" tabindex="-1"></a>  metadata {</span>
+<span id="cb5-31"><a href="#cb5-31" aria-hidden="true" tabindex="-1"></a>    name      <span class="op">=</span> <span class="st">&quot;db-seed&quot;</span></span>
+<span id="cb5-32"><a href="#cb5-32" aria-hidden="true" tabindex="-1"></a>    namespace <span class="op">=</span> <span class="va">local</span>.ns</span>
+<span id="cb5-33"><a href="#cb5-33" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb5-34"><a href="#cb5-34" aria-hidden="true" tabindex="-1"></a>  <span class="kw">data</span> <span class="op">=</span> {</span>
+<span id="cb5-35"><a href="#cb5-35" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;001-sayings.sql&quot;</span> <span class="op">=</span> <span class="va">var</span>.seed_sql</span>
+<span id="cb5-36"><a href="#cb5-36" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb5-37"><a href="#cb5-37" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p> A module declares which providers it uses, with a <code>source</code> but usually without a version, and it does not configure them: the <code>provider</code> block lives in the root module and is inherited. The root decides which cluster; the module decides what goes in it.</p>
+<p>Every Kubernetes object has a <code>metadata</code> block, and <code>metadata[0].name</code> is how you read a name back out of one, because <code>metadata</code> is a list of blocks even though there is only ever one. The <code>local.ns</code> shortcut keeps that from being repeated nine times.</p>
+<p>The secret holds the password (Kubernetes base64-encodes it; you hand over the plain value), and the config map holds the seed SQL under the file name MySQL expects.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> A config map holds up to one megabyte. The 3600 sayings are about 230 kilobytes, so there is room, but a real fortune file would not fit. Past the limit you bake the seed into an image or load it with a job.</p>
+</div></div>
+<h3 data-number="4.4.2" id="the-database"><span class="header-section-number">4.4.2</span> The database</h3>
+<p><code>database.tf</code> holds the persistent volume claim, the deployment, and the service:</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;kubernetes_persistent_volume_claim_v1&quot;</span> <span class="st">&quot;db&quot;</span> {</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>  metadata {</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>    name      <span class="op">=</span> <span class="st">&quot;db-data&quot;</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>    namespace <span class="op">=</span> <span class="va">local</span>.ns</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>  spec {</span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>    access_modes <span class="op">=</span> [<span class="st">&quot;ReadWriteOnce&quot;</span>]</span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>    resources {</span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>      requests <span class="op">=</span> {</span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>        storage <span class="op">=</span> <span class="st">&quot;1Gi&quot;</span></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>      }</span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>  <span class="co"># local-path storage binds when the first pod uses the claim</span></span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a>  wait_until_bound <span class="op">=</span> <span class="va">false</span></span>
+<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> The provider waits for a claim to be bound by default, and the default storage class in kind (and k3s) binds only when a pod first uses the claim. Leave <code>wait_until_bound</code> at its default and <code>apply</code> hangs until it times out, with the pod that would bind it waiting on the claim. Set it to <code>false</code> for storage classes that bind on first consumer.</p>
+</div></div>
+<p>The deployment is long because Kubernetes deployments are long; the pattern is the same as the Chapter 3 container, translated:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;kubernetes_deployment_v1&quot;</span> <span class="st">&quot;db&quot;</span> {</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  metadata {</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>    name      <span class="op">=</span> <span class="st">&quot;db&quot;</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>    namespace <span class="op">=</span> <span class="va">local</span>.ns</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>  spec {</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>    replicas <span class="op">=</span> <span class="dv">1</span></span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>    strategy {</span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>      type <span class="op">=</span> <span class="st">&quot;Recreate&quot;</span> <span class="co"># one writer for the volume at a time</span></span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>    selector {</span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a>      match_labels <span class="op">=</span> { app <span class="op">=</span> <span class="st">&quot;db&quot;</span> }</span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a>    template {</span>
+<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a>      metadata {</span>
+<span id="cb7-16"><a href="#cb7-16" aria-hidden="true" tabindex="-1"></a>        labels <span class="op">=</span> { app <span class="op">=</span> <span class="st">&quot;db&quot;</span> }</span>
+<span id="cb7-17"><a href="#cb7-17" aria-hidden="true" tabindex="-1"></a>      }</span>
+<span id="cb7-18"><a href="#cb7-18" aria-hidden="true" tabindex="-1"></a>      spec {</span>
+<span id="cb7-19"><a href="#cb7-19" aria-hidden="true" tabindex="-1"></a>        container {</span>
+<span id="cb7-20"><a href="#cb7-20" aria-hidden="true" tabindex="-1"></a>          name  <span class="op">=</span> <span class="st">&quot;mysql&quot;</span></span>
+<span id="cb7-21"><a href="#cb7-21" aria-hidden="true" tabindex="-1"></a>          image <span class="op">=</span> <span class="st">&quot;mysql:8.4&quot;</span></span>
+<span id="cb7-22"><a href="#cb7-22" aria-hidden="true" tabindex="-1"></a>          env {</span>
+<span id="cb7-23"><a href="#cb7-23" aria-hidden="true" tabindex="-1"></a>            name  <span class="op">=</span> <span class="st">&quot;MYSQL_RANDOM_ROOT_PASSWORD&quot;</span></span>
+<span id="cb7-24"><a href="#cb7-24" aria-hidden="true" tabindex="-1"></a>            value <span class="op">=</span> <span class="st">&quot;yes&quot;</span></span>
+<span id="cb7-25"><a href="#cb7-25" aria-hidden="true" tabindex="-1"></a>          }</span>
+<span id="cb7-26"><a href="#cb7-26" aria-hidden="true" tabindex="-1"></a>          env {</span>
+<span id="cb7-27"><a href="#cb7-27" aria-hidden="true" tabindex="-1"></a>            name  <span class="op">=</span> <span class="st">&quot;MYSQL_DATABASE&quot;</span></span>
+<span id="cb7-28"><a href="#cb7-28" aria-hidden="true" tabindex="-1"></a>            value <span class="op">=</span> <span class="st">&quot;motd&quot;</span></span>
+<span id="cb7-29"><a href="#cb7-29" aria-hidden="true" tabindex="-1"></a>          }</span>
+<span id="cb7-30"><a href="#cb7-30" aria-hidden="true" tabindex="-1"></a>          env {</span>
+<span id="cb7-31"><a href="#cb7-31" aria-hidden="true" tabindex="-1"></a>            name  <span class="op">=</span> <span class="st">&quot;MYSQL_USER&quot;</span></span>
+<span id="cb7-32"><a href="#cb7-32" aria-hidden="true" tabindex="-1"></a>            value <span class="op">=</span> <span class="st">&quot;motd&quot;</span></span>
+<span id="cb7-33"><a href="#cb7-33" aria-hidden="true" tabindex="-1"></a>          }</span>
+<span id="cb7-34"><a href="#cb7-34" aria-hidden="true" tabindex="-1"></a>          env {</span>
+<span id="cb7-35"><a href="#cb7-35" aria-hidden="true" tabindex="-1"></a>            name <span class="op">=</span> <span class="st">&quot;MYSQL_PASSWORD&quot;</span></span>
+<span id="cb7-36"><a href="#cb7-36" aria-hidden="true" tabindex="-1"></a>            value_from {</span>
+<span id="cb7-37"><a href="#cb7-37" aria-hidden="true" tabindex="-1"></a>              secret_key_ref {</span>
+<span id="cb7-38"><a href="#cb7-38" aria-hidden="true" tabindex="-1"></a>                name <span class="op">=</span> kubernetes_secret_v1.db.metadata[<span class="dv">0</span>].name</span>
+<span id="cb7-39"><a href="#cb7-39" aria-hidden="true" tabindex="-1"></a>                key  <span class="op">=</span> <span class="st">&quot;password&quot;</span></span>
+<span id="cb7-40"><a href="#cb7-40" aria-hidden="true" tabindex="-1"></a>              }</span>
+<span id="cb7-41"><a href="#cb7-41" aria-hidden="true" tabindex="-1"></a>            }</span>
+<span id="cb7-42"><a href="#cb7-42" aria-hidden="true" tabindex="-1"></a>          }</span>
+<span id="cb7-43"><a href="#cb7-43" aria-hidden="true" tabindex="-1"></a>          port {</span>
+<span id="cb7-44"><a href="#cb7-44" aria-hidden="true" tabindex="-1"></a>            container_port <span class="op">=</span> <span class="dv">3306</span></span>
+<span id="cb7-45"><a href="#cb7-45" aria-hidden="true" tabindex="-1"></a>          }</span>
+<span id="cb7-46"><a href="#cb7-46" aria-hidden="true" tabindex="-1"></a>          volume_mount {</span>
+<span id="cb7-47"><a href="#cb7-47" aria-hidden="true" tabindex="-1"></a>            name       <span class="op">=</span> <span class="st">&quot;data&quot;</span></span>
+<span id="cb7-48"><a href="#cb7-48" aria-hidden="true" tabindex="-1"></a>            mount_path <span class="op">=</span> <span class="st">&quot;/var/lib/mysql&quot;</span></span>
+<span id="cb7-49"><a href="#cb7-49" aria-hidden="true" tabindex="-1"></a>          }</span>
+<span id="cb7-50"><a href="#cb7-50" aria-hidden="true" tabindex="-1"></a>          volume_mount {</span>
+<span id="cb7-51"><a href="#cb7-51" aria-hidden="true" tabindex="-1"></a>            name       <span class="op">=</span> <span class="st">&quot;seed&quot;</span></span>
+<span id="cb7-52"><a href="#cb7-52" aria-hidden="true" tabindex="-1"></a>            mount_path <span class="op">=</span> <span class="st">&quot;/docker-entrypoint-initdb.d&quot;</span></span>
+<span id="cb7-53"><a href="#cb7-53" aria-hidden="true" tabindex="-1"></a>            read_only  <span class="op">=</span> <span class="va">true</span></span>
+<span id="cb7-54"><a href="#cb7-54" aria-hidden="true" tabindex="-1"></a>          }</span>
+<span id="cb7-55"><a href="#cb7-55" aria-hidden="true" tabindex="-1"></a>          readiness_probe {</span>
+<span id="cb7-56"><a href="#cb7-56" aria-hidden="true" tabindex="-1"></a>            exec {</span>
+<span id="cb7-57"><a href="#cb7-57" aria-hidden="true" tabindex="-1"></a>              command <span class="op">=</span> [<span class="st">&quot;mysqladmin&quot;</span>, <span class="st">&quot;ping&quot;</span>, <span class="st">&quot;-h&quot;</span>, <span class="st">&quot;127.0.0.1&quot;</span>, <span class="st">&quot;--silent&quot;</span>]</span>
+<span id="cb7-58"><a href="#cb7-58" aria-hidden="true" tabindex="-1"></a>            }</span>
+<span id="cb7-59"><a href="#cb7-59" aria-hidden="true" tabindex="-1"></a>            period_seconds <span class="op">=</span> <span class="dv">5</span></span>
+<span id="cb7-60"><a href="#cb7-60" aria-hidden="true" tabindex="-1"></a>          }</span>
+<span id="cb7-61"><a href="#cb7-61" aria-hidden="true" tabindex="-1"></a>        }</span>
+<span id="cb7-62"><a href="#cb7-62" aria-hidden="true" tabindex="-1"></a>        volume {</span>
+<span id="cb7-63"><a href="#cb7-63" aria-hidden="true" tabindex="-1"></a>          name <span class="op">=</span> <span class="st">&quot;data&quot;</span></span>
+<span id="cb7-64"><a href="#cb7-64" aria-hidden="true" tabindex="-1"></a>          persistent_volume_claim {</span>
+<span id="cb7-65"><a href="#cb7-65" aria-hidden="true" tabindex="-1"></a>            claim_name <span class="op">=</span> kubernetes_persistent_volume_claim_v1.db.metadata[<span class="dv">0</span>].name</span>
+<span id="cb7-66"><a href="#cb7-66" aria-hidden="true" tabindex="-1"></a>          }</span>
+<span id="cb7-67"><a href="#cb7-67" aria-hidden="true" tabindex="-1"></a>        }</span>
+<span id="cb7-68"><a href="#cb7-68" aria-hidden="true" tabindex="-1"></a>        volume {</span>
+<span id="cb7-69"><a href="#cb7-69" aria-hidden="true" tabindex="-1"></a>          name <span class="op">=</span> <span class="st">&quot;seed&quot;</span></span>
+<span id="cb7-70"><a href="#cb7-70" aria-hidden="true" tabindex="-1"></a>          config_map {</span>
+<span id="cb7-71"><a href="#cb7-71" aria-hidden="true" tabindex="-1"></a>            name <span class="op">=</span> kubernetes_config_map_v1.seed.metadata[<span class="dv">0</span>].name</span>
+<span id="cb7-72"><a href="#cb7-72" aria-hidden="true" tabindex="-1"></a>          }</span>
+<span id="cb7-73"><a href="#cb7-73" aria-hidden="true" tabindex="-1"></a>        }</span>
+<span id="cb7-74"><a href="#cb7-74" aria-hidden="true" tabindex="-1"></a>      }</span>
+<span id="cb7-75"><a href="#cb7-75" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb7-76"><a href="#cb7-76" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb7-77"><a href="#cb7-77" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-78"><a href="#cb7-78" aria-hidden="true" tabindex="-1"></a>  timeouts {</span>
+<span id="cb7-79"><a href="#cb7-79" aria-hidden="true" tabindex="-1"></a>    create <span class="op">=</span> <span class="st">&quot;5m&quot;</span></span>
+<span id="cb7-80"><a href="#cb7-80" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb7-81"><a href="#cb7-81" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb7-82"><a href="#cb7-82" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-83"><a href="#cb7-83" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;kubernetes_service_v1&quot;</span> <span class="st">&quot;db&quot;</span> {</span>
+<span id="cb7-84"><a href="#cb7-84" aria-hidden="true" tabindex="-1"></a>  metadata {</span>
+<span id="cb7-85"><a href="#cb7-85" aria-hidden="true" tabindex="-1"></a>    name      <span class="op">=</span> <span class="st">&quot;db&quot;</span></span>
+<span id="cb7-86"><a href="#cb7-86" aria-hidden="true" tabindex="-1"></a>    namespace <span class="op">=</span> <span class="va">local</span>.ns</span>
+<span id="cb7-87"><a href="#cb7-87" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb7-88"><a href="#cb7-88" aria-hidden="true" tabindex="-1"></a>  spec {</span>
+<span id="cb7-89"><a href="#cb7-89" aria-hidden="true" tabindex="-1"></a>    selector <span class="op">=</span> { app <span class="op">=</span> <span class="st">&quot;db&quot;</span> }</span>
+<span id="cb7-90"><a href="#cb7-90" aria-hidden="true" tabindex="-1"></a>    port {</span>
+<span id="cb7-91"><a href="#cb7-91" aria-hidden="true" tabindex="-1"></a>      port <span class="op">=</span> <span class="dv">3306</span></span>
+<span id="cb7-92"><a href="#cb7-92" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb7-93"><a href="#cb7-93" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb7-94"><a href="#cb7-94" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p>The password comes from the secret through <code>value_from</code>, so it never appears in the deployment. The <code>readiness_probe</code> is the health check from Chapter 3 in Kubernetes clothing, and it does the same job: the provider waits for a deployment’s pods to be ready before calling it created, so the readiness probe is what sequences the database before the web server.</p>
+<p> <code>timeouts</code> sets how long the provider may wait for create, update, or delete before giving up; it looks like a meta-argument, but each provider defines it for its own resource types, so not every resource has one. Loading 3600 rows takes about twenty seconds; five minutes leaves room for a slow laptop.</p>
+<p>The service gives the deployment a stable name, <code>db</code>, that the web server can use as a host name. Same idea as the network alias in Chapter 3.</p>
+<h3 data-number="4.4.3" id="the-web-server"><span class="header-section-number">4.4.3</span> The web server</h3>
+<p><code>web.tf</code>:</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;kubernetes_deployment_v1&quot;</span> <span class="st">&quot;web&quot;</span> {</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>  metadata {</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>    name      <span class="op">=</span> <span class="st">&quot;web&quot;</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>    namespace <span class="op">=</span> <span class="va">local</span>.ns</span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>  spec {</span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>    replicas <span class="op">=</span> <span class="dv">2</span></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>    selector {</span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>      match_labels <span class="op">=</span> { app <span class="op">=</span> <span class="st">&quot;web&quot;</span> }</span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>    template {</span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a>      metadata {</span>
+<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a>        labels <span class="op">=</span> { app <span class="op">=</span> <span class="st">&quot;web&quot;</span> }</span>
+<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a>      }</span>
+<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a>      spec {</span>
+<span id="cb8-16"><a href="#cb8-16" aria-hidden="true" tabindex="-1"></a>        <span class="kw">dynamic</span> <span class="st">&quot;image_pull_secrets&quot;</span> {</span>
+<span id="cb8-17"><a href="#cb8-17" aria-hidden="true" tabindex="-1"></a>          <span class="at">for_each</span> <span class="op">=</span> <span class="va">var</span>.image_pull_secret <span class="op">==</span> <span class="va">null</span> ? [] : [<span class="va">var</span>.image_pull_secret]</span>
+<span id="cb8-18"><a href="#cb8-18" aria-hidden="true" tabindex="-1"></a>          <span class="kw">content</span> {</span>
+<span id="cb8-19"><a href="#cb8-19" aria-hidden="true" tabindex="-1"></a>            name <span class="op">=</span> image_pull_secrets.value</span>
+<span id="cb8-20"><a href="#cb8-20" aria-hidden="true" tabindex="-1"></a>          }</span>
+<span id="cb8-21"><a href="#cb8-21" aria-hidden="true" tabindex="-1"></a>        }</span>
+<span id="cb8-22"><a href="#cb8-22" aria-hidden="true" tabindex="-1"></a>        container {</span>
+<span id="cb8-23"><a href="#cb8-23" aria-hidden="true" tabindex="-1"></a>          name  <span class="op">=</span> <span class="st">&quot;web&quot;</span></span>
+<span id="cb8-24"><a href="#cb8-24" aria-hidden="true" tabindex="-1"></a>          image <span class="op">=</span> <span class="va">var</span>.image</span>
+<span id="cb8-25"><a href="#cb8-25" aria-hidden="true" tabindex="-1"></a>          env {</span>
+<span id="cb8-26"><a href="#cb8-26" aria-hidden="true" tabindex="-1"></a>            name <span class="op">=</span> <span class="st">&quot;DB_PASSWORD&quot;</span></span>
+<span id="cb8-27"><a href="#cb8-27" aria-hidden="true" tabindex="-1"></a>            value_from {</span>
+<span id="cb8-28"><a href="#cb8-28" aria-hidden="true" tabindex="-1"></a>              secret_key_ref {</span>
+<span id="cb8-29"><a href="#cb8-29" aria-hidden="true" tabindex="-1"></a>                name <span class="op">=</span> kubernetes_secret_v1.db.metadata[<span class="dv">0</span>].name</span>
+<span id="cb8-30"><a href="#cb8-30" aria-hidden="true" tabindex="-1"></a>                key  <span class="op">=</span> <span class="st">&quot;password&quot;</span></span>
+<span id="cb8-31"><a href="#cb8-31" aria-hidden="true" tabindex="-1"></a>              }</span>
+<span id="cb8-32"><a href="#cb8-32" aria-hidden="true" tabindex="-1"></a>            }</span>
+<span id="cb8-33"><a href="#cb8-33" aria-hidden="true" tabindex="-1"></a>          }</span>
+<span id="cb8-34"><a href="#cb8-34" aria-hidden="true" tabindex="-1"></a>          env {</span>
+<span id="cb8-35"><a href="#cb8-35" aria-hidden="true" tabindex="-1"></a>            name  <span class="op">=</span> <span class="st">&quot;DB_DSN&quot;</span> <span class="co"># kubernetes expands $(DB_PASSWORD) at start</span></span>
+<span id="cb8-36"><a href="#cb8-36" aria-hidden="true" tabindex="-1"></a>            value <span class="op">=</span> <span class="st">&quot;motd:$(DB_PASSWORD)@tcp(db:3306)/motd&quot;</span></span>
+<span id="cb8-37"><a href="#cb8-37" aria-hidden="true" tabindex="-1"></a>          }</span>
+<span id="cb8-38"><a href="#cb8-38" aria-hidden="true" tabindex="-1"></a>          env {</span>
+<span id="cb8-39"><a href="#cb8-39" aria-hidden="true" tabindex="-1"></a>            name  <span class="op">=</span> <span class="st">&quot;TZ&quot;</span></span>
+<span id="cb8-40"><a href="#cb8-40" aria-hidden="true" tabindex="-1"></a>            value <span class="op">=</span> <span class="va">var</span>.timezone</span>
+<span id="cb8-41"><a href="#cb8-41" aria-hidden="true" tabindex="-1"></a>          }</span>
+<span id="cb8-42"><a href="#cb8-42" aria-hidden="true" tabindex="-1"></a>          port {</span>
+<span id="cb8-43"><a href="#cb8-43" aria-hidden="true" tabindex="-1"></a>            container_port <span class="op">=</span> <span class="dv">8080</span></span>
+<span id="cb8-44"><a href="#cb8-44" aria-hidden="true" tabindex="-1"></a>          }</span>
+<span id="cb8-45"><a href="#cb8-45" aria-hidden="true" tabindex="-1"></a>          readiness_probe {</span>
+<span id="cb8-46"><a href="#cb8-46" aria-hidden="true" tabindex="-1"></a>            http_get {</span>
+<span id="cb8-47"><a href="#cb8-47" aria-hidden="true" tabindex="-1"></a>              path <span class="op">=</span> <span class="st">&quot;/&quot;</span></span>
+<span id="cb8-48"><a href="#cb8-48" aria-hidden="true" tabindex="-1"></a>              port <span class="op">=</span> <span class="dv">8080</span></span>
+<span id="cb8-49"><a href="#cb8-49" aria-hidden="true" tabindex="-1"></a>            }</span>
+<span id="cb8-50"><a href="#cb8-50" aria-hidden="true" tabindex="-1"></a>            period_seconds <span class="op">=</span> <span class="dv">5</span></span>
+<span id="cb8-51"><a href="#cb8-51" aria-hidden="true" tabindex="-1"></a>          }</span>
+<span id="cb8-52"><a href="#cb8-52" aria-hidden="true" tabindex="-1"></a>        }</span>
+<span id="cb8-53"><a href="#cb8-53" aria-hidden="true" tabindex="-1"></a>      }</span>
+<span id="cb8-54"><a href="#cb8-54" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb8-55"><a href="#cb8-55" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb8-56"><a href="#cb8-56" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-57"><a href="#cb8-57" aria-hidden="true" tabindex="-1"></a>  timeouts {</span>
+<span id="cb8-58"><a href="#cb8-58" aria-hidden="true" tabindex="-1"></a>    create <span class="op">=</span> <span class="st">&quot;5m&quot;</span></span>
+<span id="cb8-59"><a href="#cb8-59" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb8-60"><a href="#cb8-60" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-61"><a href="#cb8-61" aria-hidden="true" tabindex="-1"></a>  <span class="at">depends_on</span> <span class="op">=</span> [kubernetes_service_v1.db]</span>
+<span id="cb8-62"><a href="#cb8-62" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb8-63"><a href="#cb8-63" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-64"><a href="#cb8-64" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;kubernetes_service_v1&quot;</span> <span class="st">&quot;web&quot;</span> {</span>
+<span id="cb8-65"><a href="#cb8-65" aria-hidden="true" tabindex="-1"></a>  metadata {</span>
+<span id="cb8-66"><a href="#cb8-66" aria-hidden="true" tabindex="-1"></a>    name      <span class="op">=</span> <span class="st">&quot;web&quot;</span></span>
+<span id="cb8-67"><a href="#cb8-67" aria-hidden="true" tabindex="-1"></a>    namespace <span class="op">=</span> <span class="va">local</span>.ns</span>
+<span id="cb8-68"><a href="#cb8-68" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb8-69"><a href="#cb8-69" aria-hidden="true" tabindex="-1"></a>  spec {</span>
+<span id="cb8-70"><a href="#cb8-70" aria-hidden="true" tabindex="-1"></a>    type     <span class="op">=</span> <span class="va">var</span>.node_port <span class="op">==</span> <span class="va">null</span> ? <span class="st">&quot;ClusterIP&quot;</span> : <span class="st">&quot;NodePort&quot;</span></span>
+<span id="cb8-71"><a href="#cb8-71" aria-hidden="true" tabindex="-1"></a>    selector <span class="op">=</span> { app <span class="op">=</span> <span class="st">&quot;web&quot;</span> }</span>
+<span id="cb8-72"><a href="#cb8-72" aria-hidden="true" tabindex="-1"></a>    port {</span>
+<span id="cb8-73"><a href="#cb8-73" aria-hidden="true" tabindex="-1"></a>      port        <span class="op">=</span> <span class="dv">8080</span></span>
+<span id="cb8-74"><a href="#cb8-74" aria-hidden="true" tabindex="-1"></a>      target_port <span class="op">=</span> <span class="dv">8080</span></span>
+<span id="cb8-75"><a href="#cb8-75" aria-hidden="true" tabindex="-1"></a>      node_port   <span class="op">=</span> <span class="va">var</span>.node_port</span>
+<span id="cb8-76"><a href="#cb8-76" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb8-77"><a href="#cb8-77" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb8-78"><a href="#cb8-78" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p> The <code>dynamic</code> block from the modules overview does its work here. A nested block like <code>image_pull_secrets</code> is either written or not, and you cannot put a conditional around a block, so the collection is empty when the variable is null and has one element otherwise, and the block is emitted only when a secret was given.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Wut:</strong> <code>$(DB_PASSWORD)</code> is not an OpenTofu interpolation. OpenTofu only cares about <code>${...}</code> with a brace; <code>$(...)</code> with parentheses passes through untouched, and Kubernetes expands it from an earlier <code>env</code> entry when the container starts. The password therefore goes from secret to container without ever being written into the deployment.</p>
+</div></div>
+<p>The web deployment’s readiness probe hits <code>/</code>, which answers 503 until the database answers, so the rollout is complete exactly when the service works. The service is <code>NodePort</code> when a port was given and <code>ClusterIP</code> otherwise, using the conditional expression from Chapter 3.</p>
+<p><code>outputs.tf</code> returns the two names the caller might need:</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="kw">output</span> <span class="st">&quot;namespace&quot;</span> {</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>  value <span class="op">=</span> <span class="va">local</span>.ns</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="kw">output</span> <span class="st">&quot;web_service&quot;</span> {</span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>  description <span class="op">=</span> <span class="st">&quot;Name of the web service inside the namespace.&quot;</span></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>  value       <span class="op">=</span> kubernetes_service_v1.web.metadata[<span class="dv">0</span>].name</span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<h2 data-number="4.5" id="the-root-module"><span class="header-section-number">4.5</span> The root module</h2>
+<p>The root module in <code>kubernetes</code> wires it together. Its <code>versions.tf</code> is the one from the start of the chapter, with the Kubernetes provider pointed at the <code>kind-motd</code> context. Naming the context means the configuration cannot accidentally deploy to whatever cluster <code>kubectl</code> last pointed at, which is a thing that happens.</p>
+<p><code>main.tf</code>:</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="kw">module</span> <span class="st">&quot;sayings&quot;</span> {</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">source</span> <span class="op">=</span> <span class="st">&quot;github.com/BooksByGorgo/opentofu//tasting/examples/motd?ref=main&quot;</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a><span class="kw">locals</span> {</span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>  app_dir <span class="op">=</span> <span class="st">&quot;</span><span class="ss">${</span><span class="va">path.module</span><span class="ss">}</span><span class="st">/app&quot;</span></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>  app_hash <span class="op">=</span> <span class="bu">sha1</span>(<span class="bu">join</span>(<span class="st">&quot;&quot;</span>, [<span class="cf">for</span> f <span class="cf">in</span> <span class="bu">fileset</span>(<span class="va">local</span>.app_dir, <span class="st">&quot;**&quot;</span>) :</span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>    <span class="bu">filesha1</span>(<span class="st">&quot;</span><span class="ss">${</span><span class="va">local.app_dir</span><span class="ss">}</span><span class="st">/</span><span class="ss">${</span><span class="va">f</span><span class="ss">}</span><span class="st">&quot;</span>)</span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>  ]))</span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a>  <span class="co"># the tag names the source, so a new build is a new image name</span></span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a>  image <span class="op">=</span> <span class="st">&quot;motd:</span><span class="ss">${</span><span class="va">substr(local.app_hash, 0, 12)</span><span class="ss">}</span><span class="st">&quot;</span></span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;docker_image&quot;</span> <span class="st">&quot;web&quot;</span> {</span>
+<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a>  name <span class="op">=</span> <span class="va">local</span>.image</span>
+<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-17"><a href="#cb10-17" aria-hidden="true" tabindex="-1"></a>  build {</span>
+<span id="cb10-18"><a href="#cb10-18" aria-hidden="true" tabindex="-1"></a>    context <span class="op">=</span> <span class="va">local</span>.app_dir</span>
+<span id="cb10-19"><a href="#cb10-19" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb10-20"><a href="#cb10-20" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb10-21"><a href="#cb10-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-22"><a href="#cb10-22" aria-hidden="true" tabindex="-1"></a><span class="co"># kind cannot pull from the local docker daemon, so copy the image in</span></span>
+<span id="cb10-23"><a href="#cb10-23" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;terraform_data&quot;</span> <span class="st">&quot;kind_load&quot;</span> {</span>
+<span id="cb10-24"><a href="#cb10-24" aria-hidden="true" tabindex="-1"></a>  triggers_replace <span class="op">=</span> [docker_image.web.image_id]</span>
+<span id="cb10-25"><a href="#cb10-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-26"><a href="#cb10-26" aria-hidden="true" tabindex="-1"></a>  <span class="kw">provisioner</span> <span class="st">&quot;local-exec&quot;</span> {</span>
+<span id="cb10-27"><a href="#cb10-27" aria-hidden="true" tabindex="-1"></a>    command <span class="op">=</span> <span class="st">&quot;kind load docker-image </span><span class="ss">${</span><span class="va">docker_image.web.name</span><span class="ss">}</span><span class="st"> --name motd&quot;</span></span>
+<span id="cb10-28"><a href="#cb10-28" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb10-29"><a href="#cb10-29" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb10-30"><a href="#cb10-30" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-31"><a href="#cb10-31" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;random_password&quot;</span> <span class="st">&quot;db&quot;</span> {</span>
+<span id="cb10-32"><a href="#cb10-32" aria-hidden="true" tabindex="-1"></a>  <span class="bu">length</span>  <span class="op">=</span> <span class="dv">24</span></span>
+<span id="cb10-33"><a href="#cb10-33" aria-hidden="true" tabindex="-1"></a>  special <span class="op">=</span> <span class="va">false</span></span>
+<span id="cb10-34"><a href="#cb10-34" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb10-35"><a href="#cb10-35" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-36"><a href="#cb10-36" aria-hidden="true" tabindex="-1"></a><span class="kw">module</span> <span class="st">&quot;motd&quot;</span> {</span>
+<span id="cb10-37"><a href="#cb10-37" aria-hidden="true" tabindex="-1"></a>  <span class="kw">source</span> <span class="op">=</span> <span class="st">&quot;../modules/motd-k8s&quot;</span></span>
+<span id="cb10-38"><a href="#cb10-38" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-39"><a href="#cb10-39" aria-hidden="true" tabindex="-1"></a>  image       <span class="op">=</span> docker_image.web.name</span>
+<span id="cb10-40"><a href="#cb10-40" aria-hidden="true" tabindex="-1"></a>  seed_sql    <span class="op">=</span> <span class="kw">module</span>.sayings.sql</span>
+<span id="cb10-41"><a href="#cb10-41" aria-hidden="true" tabindex="-1"></a>  db_password <span class="op">=</span> random_password.db.result</span>
+<span id="cb10-42"><a href="#cb10-42" aria-hidden="true" tabindex="-1"></a>  timezone    <span class="op">=</span> <span class="va">var</span>.timezone</span>
+<span id="cb10-43"><a href="#cb10-43" aria-hidden="true" tabindex="-1"></a>  node_port   <span class="op">=</span> <span class="dv">30080</span></span>
+<span id="cb10-44"><a href="#cb10-44" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-45"><a href="#cb10-45" aria-hidden="true" tabindex="-1"></a>  <span class="at">depends_on</span> <span class="op">=</span> [terraform_data.kind_load]</span>
+<span id="cb10-46"><a href="#cb10-46" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p>  The image tag is now the first twelve characters of the source hash instead of <code>ch2</code>. That small change does a lot: the image name changes when the source changes, so the deployment’s <code>image</code> argument changes, so Kubernetes rolls out the new version. There is no <code>triggers</code> map any more, because a new name is a new resource. A tag that names the content is the deployment equivalent of a content hash, and it is worth copying.</p>
+<p>The <code>kind load</code> step is a provisioner, from Chapter 1, doing what provisioners are good for: a command with no provider, run when its inputs change. The <code>depends_on</code> on the module makes sure the image is in the cluster before any pod tries to use it. Module arguments are the module’s variables; anything without a default must be given.</p>
+<p>The check and the outputs are the same as Chapter 3.</p>
+<h2 data-number="4.6" id="running-it"><span class="header-section-number">4.6</span> Running it</h2>
+<p>From the <code>kubernetes</code> directory:</p>
+<pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ tofu init</b>
+...
+<b>$ tofu apply</b>
+docker_image.web: Creation complete after 1s [id=sha256:9c956a29...motd:97bf81ab0552]
+terraform_data.kind_load (local-exec): Executing: ["/bin/sh" "-c" "kind load ..."]
+terraform_data.kind_load: Creation complete after 2s [id=7a316dca-9679-...]
+module.motd.kubernetes_namespace_v1.motd: Creation complete after 0s [id=motd]
+module.motd.kubernetes_secret_v1.db: Creation complete after 0s [id=motd/db]
+module.motd.kubernetes_persistent_volume_claim_v1.db: Creation complete [id=motd/db-data]
+module.motd.kubernetes_config_map_v1.seed: Creation complete after 0s [id=motd/db-seed]
+module.motd.kubernetes_service_v1.db: Creation complete after 0s [id=motd/db]
+module.motd.kubernetes_service_v1.web: Creation complete after 0s [id=motd/web]
+module.motd.kubernetes_deployment_v1.db: Creation complete after 16s [id=motd/db]
+module.motd.kubernetes_deployment_v1.web: Creation complete after 26s [id=motd/web]
+
+Apply complete! Resources: 9 added, 0 changed, 0 destroyed.</pre>
+<p>Resources inside a module are addressed as <code>module.NAME.TYPE.NAME</code>, and that is how they appear in plans, in <code>tofu state list</code>, and in <code>-replace</code> arguments.</p>
+<pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ curl localhost:8080/</b>
+<b>$ kubectl -n motd get pods</b>
+[09:43:37] A stubborn race condition expects the unexpected input.
+NAME                   READY   STATUS    RESTARTS   AGE
+db-85d5847c8c-5qgcc    1/1     Running   0          28s
+web-5dc496c778-7jcnm   1/1     Running   0          28s
+web-5dc496c778-vvk2x   1/1     Running   0          28s</pre>
+<p>Change the format string in <code>main.go</code> and plan:</p>
+<pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ tofu plan</b>
+  # docker_image.web must be replaced
+  # terraform_data.kind_load must be replaced
+  # module.motd.kubernetes_deployment_v1.web will be updated in-place
+      ~ image = "motd:97bf81ab0552" -&gt; "motd:b860b2aaad47"
+
+Plan: 2 to add, 1 to change, 2 to destroy.</pre>
+<p>A new image, loaded into the cluster, and a rolling update of the web deployment; the database is untouched. Apply, and Kubernetes replaces the two web pods one at a time while the service keeps answering.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> <code>kubernetes_deployment_v1</code> waits for the rollout to finish, so a pod that never becomes ready makes apply sit there and then fail with <code>timed out waiting for the condition</code>. The reason is never in the tool’s output. Run <code>kubectl -n motd describe pod</code> and <code>kubectl -n motd logs</code> while it waits: an <code>ImagePullBackOff</code> means the tag was never loaded into the cluster, and a failing readiness probe usually means the database is not reachable under the name the DSN uses.</p>
+</div></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> If Docker was installed as a snap on Ubuntu, <code>kind load</code> can fail with <code>permission denied</code> on a temporary file, because the snap cannot see <code>/tmp</code> or hidden directories in your home. Run with <code>TMPDIR=$HOME/tmp</code> (any visible directory in your home works) and it succeeds. Docker Desktop on macOS and Windows does not have this problem.</p>
+</div></div>
+<h2 data-number="4.7" id="key-points"><span class="header-section-number">4.7</span> Key Points</h2>
+<ul>
+<li>The cluster and the application have different lifecycles and belong in different configurations.</li>
+<li>A module is a function: variables in, resources in the middle, outputs out. The root module configures providers; child modules only declare that they need them.</li>
+<li><code>null</code> defaults make module features optional, and <code>dynamic</code> blocks turn an optional value into an optional nested block.</li>
+<li>Readiness probes are how Kubernetes says “ready”, and the provider waits for them, so they also sequence your resources.</li>
+<li>A content-addressed image tag turns a rebuild into a visible change in the deployment, which is what triggers a rollout.</li>
+<li>Resources inside modules have addresses like <code>module.motd.kubernetes_deployment_v1.web</code>.</li>
+</ul>
+<h2 data-number="4.8" id="new-syntax"><span class="header-section-number">4.8</span> New Syntax</h2>
+<table>
+<colgroup>
+<col style="width: 55%" />
+<col style="width: 44%" />
+</colgroup>
+<thead>
+<tr>
+<th style="text-align: left;">Syntax</th>
+<th style="text-align: left;">What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>module "NAME" { source = "..." ARGS }</code></td>
+<td style="text-align: left;">Call a module; arguments are its variables</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>module.NAME.OUTPUT</code></td>
+<td style="text-align: left;">Read a module output</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>output "x" { precondition { } }</code></td>
+<td style="text-align: left;">An assumption checked on an output</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>default = null</code></td>
+<td style="text-align: left;">An optional variable that is “not set”</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>dynamic "BLOCK" { for_each, content { } }</code></td>
+<td style="text-align: left;">Generate zero or more nested blocks</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>BLOCK.value</code></td>
+<td style="text-align: left;">The current element inside a dynamic block</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>metadata[0].name</code></td>
+<td style="text-align: left;">Reading an attribute of a single-block list</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>timeouts { create = "5m" }</code></td>
+<td style="text-align: left;">How long a provider may wait</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>substr(s, offset, length)</code></td>
+<td style="text-align: left;">Take part of a string</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>depends_on</code> on a <code>module</code> block</td>
+<td style="text-align: left;">Order a whole module after something</td>
+</tr>
+</tbody>
+</table>
+<h2 data-number="4.9" id="try-it"><span class="header-section-number">4.9</span> Try It</h2>
+<ul>
+<li>Add a <code>replicas</code> variable to the module and scale the web deployment from the root without touching the module’s resources.</li>
+<li>Install the NGINX ingress controller into kind and add a <code>kubernetes_ingress_v1</code> to the module, controlled by an optional <code>ingress_host</code> variable and a <code>dynamic</code> block.</li>
+<li>Replace the database deployment with a <code>kubernetes_stateful_set_v1</code> and see what changes about the volume claim.</li>
+<li>Call the module twice from one root with different namespaces, and find out what breaks first. Then fix it.</li>
+<li>Write a <code>tofu test</code> file for the sayings module that asserts <code>length(output.sayings) == 3600</code> (look up the <code>run</code> block).</li>
+<li>Delete the web pods with <code>kubectl</code> and watch Kubernetes recreate them without any help from the configuration. Then run <code>tofu plan</code> and see whether the tool noticed.</li>
+</ul>
+<h2 data-number="4.10" id="exercises"><span class="header-section-number">4.10</span> Exercises</h2>
+<ol type="1">
+<li><p><strong>Think about it:</strong> The image tag is derived from the source hash instead of using <code>motd:latest</code> with <code>image_pull_policy = "Always"</code>. Give two things that would go wrong with the <code>latest</code> approach in this configuration.</p></li>
+<li><p><strong>What does this do?</strong> How many <code>ports</code> blocks does this produce when <code>var.ports = [80, 443]</code>, and what does <code>ports.value</code> refer to in each?</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="kw">dynamic</span> <span class="st">&quot;ports&quot;</span> {</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">for_each</span> <span class="op">=</span> <span class="va">var</span>.ports</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>  <span class="kw">content</span> {</span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>    internal <span class="op">=</span> ports.value</span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>    external <span class="op">=</span> ports.value</span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div></li>
+<li><p><strong>Calculation:</strong> The web deployment has <code>replicas = 2</code>, and each pod’s readiness probe runs every 5 seconds. Roughly how long after the database becomes ready can the deployment be reported created, at the earliest? What in the configuration bounds the worst case?</p></li>
+<li><p><strong>Where is the bug?</strong></p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="kw">module</span> <span class="st">&quot;motd&quot;</span> {</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">source</span>      <span class="op">=</span> <span class="st">&quot;../modules/motd-k8s&quot;</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>  image       <span class="op">=</span> docker_image.web.name</span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>  db_password <span class="op">=</span> random_password.db.result</span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>  node_port   <span class="op">=</span> <span class="dv">30080</span></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div></li>
+<li><p><strong>Where is the bug?</strong></p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>env {</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>  name  <span class="op">=</span> <span class="st">&quot;DB_DSN&quot;</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>  value <span class="op">=</span> <span class="st">&quot;motd:</span><span class="ss">${</span><span class="va">DB_PASSWORD</span><span class="ss">}</span><span class="st">@tcp(db:3306)/motd&quot;</span></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div></li>
+<li><p><strong>Write a module</strong> around <code>kubernetes_resource_quota_v1</code>: name it <code>namespace-quota</code>, give it a namespace name and a maximum number of pods as variables, and have it create the namespace with that quota. Call it from the root for two namespaces and confirm <code>kubectl describe quota</code> in each.</p></li>
+</ol>
+<h1 class="unnumbered" id="references">References</h1>
+<div id="refs" class="references csl-bib-body" data-entry-spacing="0" role="list">
+<div id="ref-K8sProviderDocs" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[1] </div><div class="csl-right-inline">HashiCorp, <span>“<span>Terraform</span> provider for kubernetes: documentation.”</span> 2026. Available: <a href="https://github.com/hashicorp/terraform-provider-kubernetes/blob/main/docs/index.md">https://github.com/hashicorp/terraform-provider-kubernetes/blob/main/docs/index.md</a></div>
+</div>
+<div id="ref-K8sProviderDeployment" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[2] </div><div class="csl-right-inline">HashiCorp, <span>“<span>Terraform</span> provider for kubernetes: kubernetes_deployment_v1.”</span> 2026. Available: <a href="https://github.com/hashicorp/terraform-provider-kubernetes/blob/main/docs/resources/deployment_v1.md">https://github.com/hashicorp/terraform-provider-kubernetes/blob/main/docs/resources/deployment_v1.md</a></div>
+</div>
+</div>
+
+{% endraw %}

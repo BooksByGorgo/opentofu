@@ -1,0 +1,25 @@
+title: OpenTofu and Terraform
+description: Free, evolving textbooks on OpenTofu and Terraform
+theme: just-the-docs
+
+plugins:
+  - jekyll-sitemap
+
+url: https://gorgo.dev
+baseurl: /opentofu
+
+aux_links:
+  GitHub:
+    - https://github.com/BooksByGorgo/opentofu
+
+color_scheme: light
+
+footer_content: >-
+  Licensed under <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>.
+
+nav_sort: case_insensitive
+
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - vendor

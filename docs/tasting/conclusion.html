@@ -1,0 +1,28 @@
+---
+layout: default
+title: "Conclusion"
+parent: "Gorgo Tasting OpenTofu and Terraform"
+nav_order: 50
+---
+
+{% raw %}
+<h1 id="conclusion">Conclusion</h1>
+<p>You started with a configuration that ran <code>echo</code> and ended with a service on the internet, with a name, a certificate, a database, and a rollout strategy, all described in files that a colleague could apply from nothing. Here are the key takeaways:</p>
+<ul>
+<li><strong>Describe the end state, not the steps.</strong> The tool computes the steps, shows them as a plan, and applies only the difference. Applying twice is safe.</li>
+<li><strong>State is memory.</strong> It maps your blocks to real things, it holds secrets, and it never goes into git.</li>
+<li><strong>Providers are the vocabulary.</strong> Every resource type comes from one, credentials come from the environment, and the lock file keeps everyone on the same versions.</li>
+<li><strong>References are dependencies.</strong> Order comes from what mentions what, and <code>depends_on</code> is for the rare case with nothing to mention.</li>
+<li><strong>Validate in layers.</strong> <code>fmt</code>, <code>validate</code>, <code>validation</code> blocks, <code>precondition</code>, the plan, and <code>check</code> blocks, each catching what the one before could not.</li>
+<li><strong>Make change visible.</strong> Content hashes and content-addressed tags turn “the source changed” into a plan line.</li>
+<li><strong>Ready means ready.</strong> Health checks and readiness probes make “created” mean “serving”, and everything downstream gets sequenced for free.</li>
+<li><strong>Modules are functions.</strong> Variables in, resources in the middle, outputs out, and a module with no resources is still a useful function.</li>
+<li><strong>Split by lifecycle.</strong> Clusters and machines in one configuration, applications in another, with remote state carrying the outputs across.</li>
+<li><strong>Know where things run.</strong> Paths, commands, and bind mounts live on the provider’s target, and <code>upload</code> carries content across the boundary.</li>
+<li><strong>Secrets are only as sensitive as you say.</strong> Mark them, wrap what crosses states in <code>sensitive()</code>, and protect the state that holds them.</li>
+</ul>
+<p>Everything you built here can be torn down with <code>tofu destroy</code>, in the reverse order it was built, and rebuilt with <code>tofu apply</code>. That round trip is the whole promise of infrastructure as code, and now you have made it work five times. Go describe something.</p>
+<hr />
+<p><em>Content outline and editorial support from Ben. Words by Claude.</em></p>
+
+{% endraw %}

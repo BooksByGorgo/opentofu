@@ -1,5 +1,5 @@
 module "sayings" {
-  source = "github.com/BooksByGorgo/opentofu//examples/motd?ref=main"
+  source = "github.com/BooksByGorgo/opentofu//tasting/examples/motd?ref=main"
 }
 
 resource "random_password" "db" {

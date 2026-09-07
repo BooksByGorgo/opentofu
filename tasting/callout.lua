@@ -4,14 +4,10 @@
 -- and the text fills the right column, so the text does not wrap around
 -- the icon. We point at the -callout.png downsized variants (256x256,
 -- ~100KB each) so chapter PDFs do not bloat the way they would if we
--- embedded the 1024x1024 source PNGs. The path images/<kind>-callout
--- .png works for both LaTeX (from the book dir, pointing at the top-
--- level images/) and HTML (from a Jekyll chapter page at
--- /<book>/chNN.html, pointing at /images/ under docs/).
---
--- This is the single shared copy for all books. Every build invokes
--- pandoc from the book directory with --lua-filter=../callout.lua, so
--- the ../images relative path above keeps working.
+-- embedded the 1024x1024 source PNGs. The path ../images/<kind>-callout
+-- .png works for both LaTeX (pandoc runs in the book directory, and the
+-- images live one level up) and HTML (a Jekyll chapter page lives at
+-- docs/<book>/chNN.html and the images at docs/images/).
 
 local tcb = "colback=black!5, colframe=black!20, " ..
   "boxrule=0.4pt, arc=2pt, left=5pt, right=5pt, " ..
@@ -30,6 +26,15 @@ local tcb_icon = tcb ..
 
 local html_style = "background-color: #f5f5f5; border: 1px solid #ccc; " ..
   "border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em;"
+
+-- When true the HTML path emits a CSS-class span instead of an <img> so
+-- the base64 data URI for each icon kind appears only once in the document
+-- (in a <style> block injected via --include-in-header by build-site.sh).
+local single_page_callouts = false
+
+function Meta(m)
+  if m['single-page-callouts'] then single_page_callouts = true end
+end
 
 -- Map the bold label text at the start of a callout to its icon basename.
 local function callout_kind(el)
@@ -72,7 +77,7 @@ local function clean_callout_blocks(content)
   return new_blocks
 end
 
-function Div(el)
+local function Div(el)
   if not el.classes:includes("tip") then return nil end
 
   local kind = callout_kind(el)
@@ -86,7 +91,7 @@ function Div(el)
       blocks:insert(pandoc.RawBlock("latex",
         "\\begin{tcolorbox}[" .. tcb_icon .. "]"))
       blocks:insert(pandoc.RawBlock("latex",
-        "\\vspace*{0.5\\baselineskip}\\includegraphics[width=\\linewidth]{images/"
+        "\\vspace*{0.5\\baselineskip}\\includegraphics[width=\\linewidth]{../images/"
         .. kind .. "-callout.png}"))
       blocks:insert(pandoc.RawBlock("latex", "\\tcblower"))
       local cleaned = clean_callout_blocks(el.content)
@@ -114,9 +119,17 @@ function Div(el)
       blocks:insert(pandoc.RawBlock("html",
         '<div style="' .. html_style ..
         ' display: flex; gap: 12px; align-items: center;">'))
-      blocks:insert(pandoc.RawBlock("html",
-        '<img src="images/' .. kind .. '-callout.png" ' ..
-        'style="width: 48px; flex-shrink: 0;">'))
+      if single_page_callouts then
+        -- Icon referenced by CSS class; the base64 data URI lives once in
+        -- the <style> block injected by build-site.sh, not per callout.
+        blocks:insert(pandoc.RawBlock("html",
+          '<span class="callout-icon callout-' .. kind .. '" role="img" ' ..
+          'aria-label="' .. kind .. '"></span>'))
+      else
+        blocks:insert(pandoc.RawBlock("html",
+          '<img src="../images/' .. kind .. '-callout.png" ' ..
+          'style="width: 48px; flex-shrink: 0;">'))
+      end
       blocks:insert(pandoc.RawBlock("html",
         '<div style="flex: 1; min-width: 0;">'))
       for _, cb in ipairs(el.content) do
@@ -134,3 +147,8 @@ function Div(el)
     return blocks
   end
 end
+
+-- Two passes so Meta (which sets single_page_callouts) is guaranteed to
+-- run before any Div is visited; pandoc's default bottom-up traversal
+-- would call Div before Meta if they were in the same pass.
+return {{Meta = Meta}, {Div = Div}}
