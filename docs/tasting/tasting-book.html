@@ -719,8 +719,8 @@
 </ul>
 </nav>
 <h1 id="how-to-use-this-booklet">How to use this booklet</h1>
-<p>This is a short booklet about describing infrastructure in files and letting a tool make the world match the files. The tool is OpenTofu, or Terraform, or both — for everything in this booklet they are the same thing. By the end you will have a web server that serves a saying of the second, backed by a database, running first on your machine, then on Kubernetes, and finally on the internet with a real name and a real certificate. All of it is created, changed, and torn down with one command.</p>
-<p>Each chapter is meant to help you understand a topic, but you will still want to reference the provider documentation for the specifics of every argument. Hopefully, you will have the context you need to read that documentation without your eyes glazing over.</p>
+<p>This is a short booklet to give you a taste of OpenTofu. By the end you will have a web server that serves sayings, backed by a database, running first on your machine, then on Kubernetes, and finally on the internet with a real name and a real certificate. All of it is created, changed, and torn down with one command.</p>
+<p>Each chapter is meant to help you understand a topic, but you will still want to reference the provider documentation for the specifics of every argument. Hopefully, after this taste, you will have the context you need to dig into deeper reference material.</p>
 <h2 id="opentofu-and-terraform">OpenTofu and Terraform</h2>
 <p> Terraform was created by HashiCorp in 2014 and became the standard way to describe infrastructure as code. In 2023 HashiCorp changed its license to one that is no longer open source, and the community forked the last open source release as OpenTofu under the Linux Foundation. The two projects share the same language, the same providers, the same state file format, and the same commands. The differences are at the edges, and Appendix A lists the ones that matter.</p>
 <p>This booklet treats the two as equivalent. Commands are written as <code>tofu</code>; if you use Terraform, type <code>terraform</code> instead. Every configuration in this booklet works with both, and where one has a feature the other lacks, the booklet does not use it.</p>
@@ -737,7 +737,7 @@
 <li><strong>Docker</strong> running on your machine (Chapters 2 through 5): Docker Engine on Linux, Docker Desktop on macOS and Windows.</li>
 <li><strong>Go</strong> 1.21 or newer (Chapters 2 and 3, for running the server outside a container): the installers at <a href="https://go.dev/dl/">go.dev/dl</a> cover all three systems, or <code>brew install go</code> on macOS and <code>winget install GoLang.Go</code> on Windows. The examples declare Go 1.26 in <code>go.mod</code>, and any Go from 1.21 on fetches that toolchain for you the first time it is needed.</li>
 <li><strong>kind</strong> and <strong>kubectl</strong> (Chapter 4). On macOS, <code>brew install kind kubectl</code>. On Windows, <code>winget install Kubernetes.kind</code> and then <code>winget install Kubernetes.kubectl</code>. On Linux, the release binaries from the two projects’ sites.</li>
-<li>For Chapter 5, an <strong>Oracle Cloud</strong> free tier account, a domain whose DNS is hosted by <strong>Cloudflare</strong>, and an email address for <strong>Let’s Encrypt</strong>.</li>
+<li>For Chapter 5, an <strong>Oracle Cloud</strong> free tier account, a domain whose DNS is hosted by <strong>Cloudflare</strong> (free is fine), and an email address for <strong>Let’s Encrypt</strong>.</li>
 </ul>
 <h2 id="windows">Windows</h2>
 <p>The sessions in this booklet use a POSIX shell, which is what macOS and Linux give you. On Windows you have two good options.</p>
@@ -787,7 +787,7 @@
 <div class="sourceCode" id="cb1"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;terraform_data&quot;</span> <span class="st">&quot;hello&quot;</span> {</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  input <span class="op">=</span> <span class="st">&quot;hello world&quot;</span></span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
-<p>Terminal sessions are shown in an outlined box. Lines that start with <code>$</code> are what you type, in bold; everything else is what the tool printed back:</p>
+<p>Terminal sessions are shown in an outlined box. Bold lines that start with <code>$</code> are what you type — don’t type the <code>$</code>; everything else is what the tool printed back:</p>
 <pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ tofu plan</b>
 Plan: 1 to add, 0 to change, 0 to destroy.</pre>
 <p>Output is trimmed to the interesting lines, and a line with only <code>...</code> stands for output that was left out. Your output will have more in it, and the ids and timings will differ.</p>
@@ -795,7 +795,7 @@ Plan: 1 to add, 0 to change, 0 to destroy.</pre>
 <h2 id="chapter-layout">Chapter layout</h2>
 <p>Each chapter follows a consistent structure:</p>
 <ul>
-<li><strong>The need, why it matters, why it is hard, and the strategy</strong> at the top, so you know what problem the chapter solves before it starts solving it.</li>
+<li><strong>The need, why it matters, why it is hard, and the strategy</strong> at the top, so you know the problem the chapter solves before it starts solving it.</li>
 <li>The <strong>main content</strong> with explanations, configuration, commands, and callouts.</li>
 <li><strong>Key Points</strong> summarizing the concepts that were introduced.</li>
 <li><strong>New Syntax</strong> collecting the language elements the chapter introduced in one table.</li>
@@ -2126,7 +2126,7 @@ ${i}:${n}${i &lt; length(names) - 1 ? &quot;,&quot; : &quot;&quot;}
 <span id="cb39-28"><a href="#cb39-28" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb39-29"><a href="#cb39-29" aria-hidden="true" tabindex="-1"></a><span class="kw">variable</span> <span class="st">&quot;timezone&quot;</span> {</span>
 <span id="cb39-30"><a href="#cb39-30" aria-hidden="true" tabindex="-1"></a>  type        <span class="op">=</span> <span class="dt">string</span></span>
-<span id="cb39-31"><a href="#cb39-31" aria-hidden="true" tabindex="-1"></a>  description <span class="op">=</span> <span class="st">&quot;Time zone the server uses to pick the saying of the second.&quot;</span></span>
+<span id="cb39-31"><a href="#cb39-31" aria-hidden="true" tabindex="-1"></a>  description <span class="op">=</span> <span class="st">&quot;Time zone the server uses to pick the current saying.&quot;</span></span>
 <span id="cb39-32"><a href="#cb39-32" aria-hidden="true" tabindex="-1"></a>  default     <span class="op">=</span> <span class="st">&quot;America/Los_Angeles&quot;</span></span>
 <span id="cb39-33"><a href="#cb39-33" aria-hidden="true" tabindex="-1"></a>}</span>
 <span id="cb39-34"><a href="#cb39-34" aria-hidden="true" tabindex="-1"></a></span>
@@ -3011,7 +3011,7 @@ Plan: 2 to add, 1 to change, 2 to destroy.</pre>
 <b>$ tofu apply</b></pre>
 <p>The first apply builds the image on the machine, which should take a few minutes on one core with a gigabyte of memory (the swap in cloud-init is what makes it possible), pulls MySQL and Caddy, loads the sayings, and starts the proxy. That estimate is untested too: the application stage was applied against a local Docker daemon with a self-signed certificate standing in for stage one, not against the Oracle machine. Then:</p>
 <pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ curl -k $(tofu output -raw url)</b></pre>
-<p>Or open the URL in a browser, accept the staging warning, and read your saying of the second. Switch stage one to the production ACME server, apply it, apply stage two, and the warning is gone.</p>
+<p>Or open the URL in a browser, accept the staging warning, and read your saying. Switch stage one to the production ACME server, apply it, apply stage two, and the warning is gone.</p>
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
 <span class="callout-icon callout-trap" role="img" aria-label="trap"></span>
 <div style="flex: 1; min-width: 0;">

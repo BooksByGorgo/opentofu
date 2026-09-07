@@ -6,7 +6,7 @@ variable "docker_host" {
 
 variable "timezone" {
   type        = string
-  description = "Time zone the server uses to pick the saying of the second."
+  description = "Time zone the server uses to pick the current saying."
   default     = "America/Los_Angeles"
 }
 

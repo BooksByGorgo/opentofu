@@ -421,7 +421,7 @@ nav_order: 5
 <b>$ tofu apply</b></pre>
 <p>The first apply builds the image on the machine, which should take a few minutes on one core with a gigabyte of memory (the swap in cloud-init is what makes it possible), pulls MySQL and Caddy, loads the sayings, and starts the proxy. That estimate is untested too: the application stage was applied against a local Docker daemon with a self-signed certificate standing in for stage one, not against the Oracle machine. Then:</p>
 <pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ curl -k $(tofu output -raw url)</b></pre>
-<p>Or open the URL in a browser, accept the staging warning, and read your saying of the second. Switch stage one to the production ACME server, apply it, apply stage two, and the warning is gone.</p>
+<p>Or open the URL in a browser, accept the staging warning, and read your saying. Switch stage one to the production ACME server, apply it, apply stage two, and the warning is gone.</p>
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
 <img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
 <div style="flex: 1; min-width: 0;">
