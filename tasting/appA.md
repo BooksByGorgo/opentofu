@@ -17,7 +17,7 @@ Everything here applies to OpenTofu and Terraform alike unless a line says other
   Things with different lifecycles (a cluster and what runs on it, infrastructure and application) go in different root modules, as Chapters 4 and 5 do [@OTF_ModuleComposition; @TerraformStyle].
 - **Use the conventional file names.**
   `versions.tf` (the `terraform` block), `providers.tf`, `variables.tf`, `outputs.tf`, `main.tf`, and more files named for what they hold (`network.tf`, `dns.tf`).
-  The tool does not care; the next reader does [@OTF_ModuleStructure; @TerraformStyle].
+  OpenTofu does not care; the next reader does [@OTF_ModuleStructure; @TerraformStyle].
 - **Name resources for their role, not their type:** `web`, not `web_container`.
   The type is already in the address.
   Use underscores in names, never dashes, and keep names short: they appear in every plan [@TerraformStyle; @OTF_Style].
@@ -92,7 +92,7 @@ Everything here applies to OpenTofu and Terraform alike unless a line says other
 \index{best practices!change}
 
 - **Prefer immutable artifacts.**
-  An image tagged with its content hash (Chapter 4) is a change the tool can see; `latest` is not [@K8sImages; @K8sConfigBest].
+  An image tagged with its content hash (Chapter 4) is a change OpenTofu can see; `latest` is not [@K8sImages; @K8sConfigBest].
 - **Provisioners are a last resort.**
   They run only at creation, their failures leave resources tainted, and their commands are invisible to the plan.
   Prefer a provider, cloud-init, or a proper configuration management tool, and use `terraform_data` with `local-exec` for the small glue that has no better home [@OTF_Provisioners; @TF_TerraformData].
@@ -108,20 +108,20 @@ Everything here applies to OpenTofu and Terraform alike unless a line says other
 \index{recommendations!tools}
 
 - `tofu fmt -recursive` and `tofu validate` in a pre-commit hook [@OTF_Fmt; @OTF_Validate; @PreCommit].
-- **tflint** for lint rules the tool does not enforce (unused variables, deprecated arguments, provider-specific checks) [@TFLint].
+- **tflint** for lint rules OpenTofu does not enforce (unused variables, deprecated arguments, provider-specific checks) [@TFLint].
 - **trivy** or **checkov** for security scanning of configurations (open security groups, unencrypted storage) [@Trivy; @Checkov].
 - **terraform-docs** to generate the variables and outputs tables of a module's README from its files [@TerraformDocsTool].
 - **tenv** (or a similar version manager) to install and switch between OpenTofu and Terraform versions per project [@Tenv].
 - An editor with the language server, which gives completion for every provider's arguments [@OTF_LS].
 
-### Working with the tool
+### Working with OpenTofu
 
 \index{recommendations!working}
 
 - `tofu console` to try an expression before putting it in a file [@OTF_Console].
 - `tofu show` to read the state or a saved plan; `tofu show -json tfplan` for scripts [@OTF_Show].
 - `tofu graph | dot -Tsvg > graph.svg` to see the dependency graph when the order surprises you [@OTF_Graph].
-- `tofu plan -refresh-only` to see drift (changes made outside the tool) without planning any fixes, and `tofu apply -refresh-only` to accept it into the state [@OTF_Plan; @OTF_Refresh].
+- `tofu plan -refresh-only` to see drift (changes made outside OpenTofu) without planning any fixes, and `tofu apply -refresh-only` to accept it into the state [@OTF_Plan; @OTF_Refresh].
 - `tofu apply -replace=ADDRESS` to force one resource to be recreated, instead of tainting or deleting things [@OTF_Plan].
 - `TF_LOG=DEBUG tofu plan` when a provider does something inexplicable; it prints every API call [@OTF_Debugging].
 - `tofu test` with `.tftest.hcl` files for modules that deserve tests [@OTF_Test].
@@ -161,7 +161,7 @@ Messages are abbreviated.
 | `Inconsistent dependency lock file` | The lock file and the constraints disagree; `tofu init` if a constraint changed, `tofu init -upgrade` to move to newer versions [@OTF_LockFile; @OTF_Init]. |
 | `Backend initialization required` | The backend settings changed; `tofu init -migrate-state` to move state, `-reconfigure` to point at existing state [@OTF_Init; @OTF_Backends]. |
 | `Failed to query available provider packages` | Wrong `source` address, a typo in the version, or no network. Check the registry page for the exact address [@OTF_ProviderRequirements]. |
-| `Unsupported OpenTofu Core version` | `required_version` excludes the tool you are running; upgrade the tool or loosen the constraint [@OTF_Settings]. |
+| `Unsupported OpenTofu Core version` | `required_version` excludes the version you are running; upgrade OpenTofu or loosen the constraint [@OTF_Settings]. |
 | `Error acquiring the state lock` | Another apply is running, or one crashed and left the lock; wait, then `tofu force-unlock ID` only when you are sure it is stale [@OTF_StateLocking; @OTF_ForceUnlock]. |
 
 ### Configuration
@@ -196,7 +196,7 @@ Messages are abbreviated.
 | Message | Cause and fix |
 |:--------------------|:--------------------|
 | `Bind for 0.0.0.0:8080 failed: port is already allocated` | Another process or container owns the port; change the variable [@DockerNetwork]. |
-| `Conflict. The container name "/motd-db" is already in use` | A container the tool does not know about; remove it or import it [@DockerRun; @OTF_ImportCli]. |
+| `Conflict. The container name "/motd-db" is already in use` | A container OpenTofu does not know about; remove it or import it [@DockerRun; @OTF_ImportCli]. |
 | `Cannot connect to the Docker daemon` | Docker is not running, or the socket needs your user in the `docker` group, or the `host` is wrong [@DockerPostInstall; @DockerProvider]. |
 | `timed out waiting for the condition` (Kubernetes) | The rollout never became ready; `kubectl describe pod` and `kubectl logs` say why [@K8sProviderDeployment; @K8sDebugPods]. |
 | `ImagePullBackOff` | The cluster cannot pull the image: not loaded into kind, not pushed to the registry, or no pull secret [@K8sImages; @KindLoad]. |

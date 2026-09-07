@@ -4,7 +4,7 @@ You started with a configuration that ran `echo` and ended with a service on the
 Here are the key takeaways:
 
 - **Describe the end state, not the steps.**
-  The tool computes the steps, shows them as a plan, and applies only the difference.
+  OpenTofu computes the steps, shows them as a plan, and applies only the difference.
   Applying twice is safe.
 - **State is memory.**
   It maps your blocks to real things, it holds secrets, and it never goes into git.

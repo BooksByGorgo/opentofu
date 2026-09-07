@@ -7,13 +7,13 @@ header-includes:
 # 1. Hello, World
 
 **1. Think about it:** `tofu apply` prints hello world the first time and nothing the second time.
-Explain what the tool compared to decide there was nothing to do, and where each side of the comparison came from.
+Explain what OpenTofu compared to decide there was nothing to do, and where each side of the comparison came from.
 
 **Answer:** It compared the desired state with the recorded state.
 The desired state comes from the configuration files: one `terraform_data.hello` should exist.
 The recorded state comes from `terraform.tfstate`, written by the first apply: a `terraform_data.hello` exists with a given id.
 The two agree, so the plan is empty and no provisioner runs.
-For resources backed by a provider, the tool also refreshes the recorded state against reality before comparing, which is how it notices things deleted behind its back.
+For resources backed by a provider, OpenTofu also refreshes the recorded state against reality before comparing, which is how it notices things deleted behind its back.
 
 ---
 
@@ -106,7 +106,7 @@ What would happen if `triggers` were removed entirely and you edited `main.go`?
 
 **Answer:** With `timestamp()` the trigger value changes on every plan, so every apply rebuilds the image and replaces the container, even when nothing changed.
 That is the "provisioner on every run" anti-pattern in a different coat.
-Without `triggers`, editing `main.go` changes nothing the tool can see: the image name is still `motd:ch2`, so the plan is empty and the old server keeps running.
+Without `triggers`, editing `main.go` changes nothing OpenTofu can see: the image name is still `motd:ch2`, so the plan is empty and the old server keeps running.
 
 ---
 

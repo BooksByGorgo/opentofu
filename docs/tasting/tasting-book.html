@@ -727,7 +727,7 @@
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
 <span class="callout-icon callout-wut" role="img" aria-label="wut"></span>
 <div style="flex: 1; min-width: 0;">
-<p><strong>Wut:</strong> The top-level configuration block is called <code>terraform</code> even in OpenTofu. OpenTofu kept the name so that existing configurations keep working. When you see <code>terraform { ... }</code> in a file, read it as “settings for the tool”.</p>
+<p><strong>Wut:</strong> The top-level configuration block is called <code>terraform</code> even in OpenTofu. OpenTofu kept the name so that existing configurations keep working. When you see <code>terraform { ... }</code> in a file, read it as “settings for OpenTofu”.</p>
 </div></div>
 <h2 id="callouts">Callouts</h2>
 <p><strong>Tips</strong> call out details that you need to pay special attention to. <strong>Traps</strong> warn you of common mistakes. <strong>Wut</strong> calls out a detail that is counter-intuitive, so make sure you pay attention.</p>
@@ -777,7 +777,7 @@
 </tr>
 <tr>
 <td style="text-align: left;"><code>~/.ssh/id_ed25519.pub</code>, <code>~/.kube/config</code></td>
-<td style="text-align: left;">the same; the tool expands <code>~</code> to your home directory</td>
+<td style="text-align: left;">the same; OpenTofu expands <code>~</code> to your home directory</td>
 </tr>
 </tbody>
 </table>
@@ -805,14 +805,14 @@ Plan: 1 to add, 0 to change, 0 to destroy.</pre>
 <p>New syntax is introduced when a chapter needs it, with an attempt to explain why it exists and how to think about it, not just what it is.</p>
 <h2 id="appendices">Appendices</h2>
 <p>Appendix A collects best practices, recommendations, and common errors for OpenTofu and Terraform in one place. Skim it once now so that you know it exists, and read it properly after Chapter 3, when the advice will make sense. The chapters point to it when they run into one of its items.</p>
-<p>Appendix B lists what the tool provides without any provider: the built-in resource and data source, the block types, the meta-arguments, the named values, the operators, and the commonly used built-in functions with an example of each. Keep it open while you write configuration.</p>
+<p>Appendix B lists what OpenTofu provides without any provider: the built-in resource and data source, the block types, the meta-arguments, the named values, the operators, and the commonly used built-in functions with an example of each. Keep it open while you write configuration.</p>
 <h2 id="exercises">Exercises</h2>
 <p>Do not skip the exercises at the end of the chapters. You can get the answer key, but do not look at it before you work out the answer yourself. If you peek first, the concepts will not sink in. And most of all, run the examples. Infrastructure as code is learned by applying, breaking, and destroying things, and there is no other way that comes close to it.</p>
 <h1 id="hello-world">Hello, World</h1>
 <p><strong>The need.</strong> You have something that must exist: a running program, a server, a database, a DNS record. Today you make it exist by typing commands, clicking through a console, or following a wiki page that was accurate two years ago. Tomorrow you need it again on another machine, or you need to change one thing, or a colleague needs to know what you did.</p>
 <p><strong>Why it matters.</strong> Infrastructure you cannot reproduce is infrastructure you cannot fix, review, or hand off. Writing it down as code means it can be versioned, diffed, reviewed in a pull request, and rebuilt from nothing after a disaster or a mistake.</p>
 <p><strong>Why it is hard.</strong> The world is stateful. A script that creates a server works the first time and fails the second time because the server already exists. Steps depend on each other, scripts fail halfway through, and the only record of what exists is whatever you remember.</p>
-<p><strong>The strategy.</strong> Instead of writing steps, you describe the desired end state in files. The tool compares the files with what exists, shows you the difference as a plan, and applies only the difference. It remembers what it created in a state file so that the next run starts from what is already there. This chapter builds the smallest possible example of that loop: a configuration that runs <code>echo hello world</code>.</p>
+<p><strong>The strategy.</strong> Instead of writing steps, you describe the desired end state in files. OpenTofu compares the files with what exists, shows you the difference as a plan, and applies only the difference. It remembers what it created in a state file so that the next run starts from what is already there. This chapter builds the smallest possible example of that loop: a configuration that runs <code>echo hello world</code>.</p>
 <h2 id="the-smallest-configuration">The smallest configuration</h2>
 <p> Create the directory <code>hello-world</code>, and in it a file named <code>main.tf</code>:</p>
 <div class="sourceCode" id="cb2"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;terraform_data&quot;</span> <span class="st">&quot;hello&quot;</span> {</span>
@@ -820,15 +820,15 @@ Plan: 1 to add, 0 to change, 0 to destroy.</pre>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    command <span class="op">=</span> <span class="st">&quot;echo hello world&quot;</span></span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  }</span>
 <span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
-<p>That is the whole thing. Before running it, read it the way the tool does.</p>
+<p>That is the whole thing. Before running it, read it the way OpenTofu does.</p>
 <p> The language is made of <strong>blocks</strong>. A block has a type (<code>resource</code>), zero or more labels in quotes (<code>"terraform_data"</code> and <code>"hello"</code>), and a body in braces holding <strong>arguments</strong> (<code>command = "..."</code>) and nested blocks (<code>provisioner</code>). Think of a block as a paragraph that describes one thing.</p>
 <p> A <code>resource</code> block is a noun: a thing that should exist. Its first label is the resource <strong>type</strong>, which decides what kind of thing it is and which arguments it accepts. <code>terraform_data</code> is a built-in resource type that manages nothing at all. It is a placeholder: a thing that exists only so that you can attach behavior to it or hang other things off it. That makes it perfect for a first example, because it needs no accounts, no plugins, and no network. Its second label is the <strong>name</strong>, which is how the rest of the configuration refers to this particular one. Together they form the address <code>terraform_data.hello</code>.</p>
-<p> A <code>provisioner</code> block says “when this resource is created, also do this”. <code>local-exec</code> runs a shell command on the machine where you run <code>tofu</code>. Provisioners are an escape hatch that you will use rarely in real work (see Appendix A), but they let the tool run <code>echo</code>, which is exactly what you want right now.</p>
+<p> A <code>provisioner</code> block says “when this resource is created, also do this”. <code>local-exec</code> runs a shell command on the machine where you run <code>tofu</code>. Provisioners are an escape hatch that you will use rarely in real work (see Appendix A), but they let OpenTofu run <code>echo</code>, which is exactly what you want right now.</p>
 <h2 id="the-workflow">The workflow</h2>
 <p> Every configuration directory must be initialized with <code>init</code>. Initialize <code>hello-world</code>:</p>
 <pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ tofu init</b>
 OpenTofu has been successfully initialized!</pre>
-<p><code>init</code> prepares the working directory: it downloads any plugins the configuration needs and sets up where state is stored. This configuration needs no plugins, so <code>init</code> has almost nothing to do, but it is still required. You run it again whenever the plugins or the state settings change; the tool reminds you when you forget.</p>
+<p><code>init</code> prepares the working directory: it downloads any plugins the configuration needs and sets up where state is stored. This configuration needs no plugins, so <code>init</code> has almost nothing to do, but it is still required. You run it again whenever the plugins or the state settings change; OpenTofu reminds you when you forget.</p>
 <p> Next, ask what would happen:</p>
 <pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ tofu plan</b>
 OpenTofu will perform the following actions:
@@ -863,7 +863,7 @@ Apply complete! Resources: 1 added, 0 changed, 0 destroyed.</pre>
 No changes. Your infrastructure matches the configuration.
 
 Apply complete! Resources: 0 added, 0 changed, 0 destroyed.</pre>
-<p> This is the most important idea in the booklet. You did not tell the tool to run <code>echo</code> — you told it that <code>terraform_data.hello</code> should exist. It already exists, so there is nothing to do. A configuration describes an end state, and applying it twice is safe.</p>
+<p> This is the most important idea in the booklet. You did not tell OpenTofu to run <code>echo</code> — you told it that <code>terraform_data.hello</code> should exist. It already exists, so there is nothing to do. A configuration describes an end state, and applying it twice is safe.</p>
 <p> Finally, take it all back:</p>
 <pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ tofu destroy</b>
 terraform_data.hello: Destroying... [id=3619212a-1cff-2c5e-3400-ff0bbf709872]
@@ -880,7 +880,7 @@ Destroy complete! Resources: 1 destroyed.</pre>
 <p> Look in the <code>hello-world</code> directory after the first <code>apply</code>:</p>
 <pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ ls</b>
 main.tf  terraform.tfstate</pre>
-<p><code>terraform.tfstate</code> is the tool’s memory. It records which real things correspond to which resource blocks, along with their ids and attributes. That is how the second <code>apply</code> knew there was nothing to do, and how <code>destroy</code> knew what to remove.</p>
+<p><code>terraform.tfstate</code> is OpenTofu’s memory. It records which real things correspond to which resource blocks, along with their ids and attributes. That is how the second <code>apply</code> knew there was nothing to do, and how <code>destroy</code> knew what to remove.</p>
 <p>You can ask what the state contains:</p>
 <pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ tofu state list</b>
 terraform_data.hello</pre>
@@ -921,8 +921,8 @@ terraform_data.hello</pre>
 <span id="cb3-27"><a href="#cb3-27" aria-hidden="true" tabindex="-1"></a>  description <span class="op">=</span> <span class="st">&quot;What was printed.&quot;</span></span>
 <span id="cb3-28"><a href="#cb3-28" aria-hidden="true" tabindex="-1"></a>  value       <span class="op">=</span> terraform_data.hello.<span class="kw">output</span></span>
 <span id="cb3-29"><a href="#cb3-29" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
-<p>There is a lot of new syntax here, so take it a block at a time. <code>#</code> starts a comment that runs to the end of the line; the tool ignores it, and the next reader is grateful for it. Read the comments in this example to better understand what the code is doing.</p>
-<p> The <code>terraform</code> block holds settings for the tool itself. <code>required_version</code> refuses to run with a tool older than 1.6 — the release where OpenTofu began. A version constraint is a promise about what you tested with. It means a colleague with an old install gets a clear error instead of a strange one.</p>
+<p>There is a lot of new syntax here, so take it a block at a time. <code>#</code> starts a comment that runs to the end of the line; OpenTofu ignores it, and the next reader is grateful for it. Read the comments in this example to better understand what the code is doing.</p>
+<p> The <code>terraform</code> block holds settings for OpenTofu itself. <code>required_version</code> refuses to run with a tool older than 1.6 — the release where OpenTofu began. A version constraint is a promise about what you tested with. It means a colleague with an old install gets a clear error instead of a strange one.</p>
 <p> A <code>variable</code> block declares an <strong>input variable</strong>: a value the user of the configuration can set. Think of it as a function parameter. <code>type</code> says what kind of value is allowed, <code>description</code> explains what the variable is for, and <code>default</code> makes it optional. A variable without a default must be supplied, or <code>apply</code> will stop and ask for it.</p>
 <p> Inside expressions the variable is <code>var.greeting</code>. The <code>var.</code> prefix is there so that variables cannot be confused with resources.</p>
 <p> <code>"echo '${self.input}'"</code> is a string with an <strong>interpolation</strong>. Read <code>${...}</code> as “paste the value of this expression here”. Anything outside the braces is literal text. When the whole value is one expression, you do not need a string at all: <code>input = var.greeting</code> refers to the value directly instead of pasting it into text.</p>
@@ -945,7 +945,7 @@ hello world</pre>
 <span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;greeting&quot;</span><span class="fu">:</span> <span class="st">&quot;hola mundo&quot;</span></span>
 <span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div>
 <p>The environment form is how you pass values from scripts and CI without putting them on a command line where <code>ps</code> can see them.</p>
-<p> Nothing stops you from using several of these at once, so the tool reads every source it can find and lets the later ones overwrite the earlier ones. From weakest to strongest:</p>
+<p> Nothing stops you from using several of these at once, so OpenTofu reads every source it can find and lets the later ones overwrite the earlier ones. From weakest to strongest:</p>
 <ol type="1">
 <li>the <code>default</code> in the <code>variable</code> block</li>
 <li><code>TF_VAR_greeting</code> in the environment</li>
@@ -961,7 +961,7 @@ hello world</pre>
 <p><strong>Trap:</strong> A value from <code>-var</code> or <code>TF_VAR_</code> is used for one command and then forgotten. Nothing writes it back to <code>terraform.tfvars</code>, and a root module’s variables are not kept in the state file either, so the value is gone when the command exits while whatever it built lives on. The next plan resolves the variable from the file or the default again and proposes to undo the change. If a value should stick, put it in a file.</p>
 </div></div>
 <h2 id="validation">Validation</h2>
-<p> A configuration can be wrong in several ways, and the tool checks for each kind in its own layer. The earlier a layer catches a problem, the cheaper it is.</p>
+<p> A configuration can be wrong in several ways, and OpenTofu checks for each kind in its own layer. The earlier a layer catches a problem, the cheaper it is.</p>
 <p> <strong>Layer 1: formatting.</strong> <code>tofu fmt</code> rewrites your files in the canonical style: two-space indentation, aligned <code>=</code> signs, no trailing spaces. Run it before every commit, or let your editor run it on save. CI runs <code>tofu fmt -check</code>, which exits non-zero if anything would change. <code>tofu fmt -diff</code> shows what it would rewrite, without rewriting it:</p>
 <pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ tofu fmt -diff</b>
 --- old/main.tf
@@ -1011,8 +1011,8 @@ Plan: 1 to add, 0 to change, 1 to destroy.
 ...
 terraform_data.hello (local-exec): hola mundo</pre>
 <p> The plan says the resource “must be replaced”, and the changed <code>triggers_replace</code> list is why. Some changes can be made in place; others need the old thing destroyed and a new one created. Each resource type decides which is which, and the plan always tells you: <code>~</code> for an update in place, <code>-/+</code> for a replacement.</p>
-<p><code>triggers_replace</code> deserves a closer look, because it is doing the real work in this configuration. It takes a list of values. When the resource is created, the tool records the list in state along with everything else about the resource. On every later plan it evaluates the list again and compares it with what was recorded. If every element is the same, the resource is left alone; if any element differs, the resource is planned for replacement, no matter what else changed. Think of the list as the resource’s identity: as long as the identity holds, it is the same thing; when the identity changes, it is a different thing, and has to be created.</p>
-<p>Why does <code>terraform_data</code> need such an argument when other resource types do not? A container or a database has real attributes, and the provider knows which of them can be changed in place and which cannot; a new image, for instance, means a new container. <code>terraform_data</code> manages nothing real, so no part of it ever <em>needs</em> replacing. Left alone, the tool would happily update <code>input</code> in place forever. <code>triggers_replace</code> is how you tell it which values matter. Here the greeting is listed, so a new greeting means a new resource, and because provisioners run at creation, a new resource means another <code>echo</code>. That is also why the greeting appears twice in the block: <code>input</code> carries it to the provisioner through <code>self.input</code>, and <code>triggers_replace</code> turns a changed greeting into a replacement.</p>
+<p><code>triggers_replace</code> deserves a closer look, because it is doing the real work in this configuration. It takes a list of values. When the resource is created, OpenTofu records the list in state along with everything else about the resource. On every later plan it evaluates the list again and compares it with what was recorded. If every element is the same, the resource is left alone; if any element differs, the resource is planned for replacement, no matter what else changed. Think of the list as the resource’s identity: as long as the identity holds, it is the same thing; when the identity changes, it is a different thing, and has to be created.</p>
+<p>Why does <code>terraform_data</code> need such an argument when other resource types do not? A container or a database has real attributes, and the provider knows which of them can be changed in place and which cannot; a new image, for instance, means a new container. <code>terraform_data</code> manages nothing real, so no part of it ever <em>needs</em> replacing. Left alone, OpenTofu would happily update <code>input</code> in place forever. <code>triggers_replace</code> is how you tell it which values matter. Here the greeting is listed, so a new greeting means a new resource, and because provisioners run at creation, a new resource means another <code>echo</code>. That is also why the greeting appears twice in the block: <code>input</code> carries it to the provisioner through <code>self.input</code>, and <code>triggers_replace</code> turns a changed greeting into a replacement.</p>
 <p>The list can hold more than one value, and a change to any one of them is enough to replace the resource. When you want a replacement without changing anything, <code>tofu apply -replace=terraform_data.hello</code> forces one from the command line. Chapter 3 introduces <code>replace_triggered_by</code>, the general form of this idea: it works on any resource type and watches other resources instead of values.</p>
 <p>Run the same apply a second time, with the same greeting, and nothing happens:</p>
 <pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ tofu apply -var 'greeting=hola mundo'</b>
@@ -1028,13 +1028,13 @@ Apply complete! Resources: 0 added, 0 changed, 0 destroyed.</pre>
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
 <span class="callout-icon callout-tip" role="img" aria-label="tip"></span>
 <div style="flex: 1; min-width: 0;">
-<p><strong>Tip:</strong> Provisioners are the tool’s escape hatch, and Appendix A explains why they are a last resort in real projects. Chapter 2 replaces <code>echo</code> with resources that talk to real APIs. Even so, <code>terraform_data</code> plus <code>local-exec</code> is a fine way to glue in a command that has no provider, as Chapter 4 does with <code>kind load</code>.</p>
+<p><strong>Tip:</strong> Provisioners are OpenTofu’s escape hatch, and Appendix A explains why they are a last resort in real projects. Chapter 2 replaces <code>echo</code> with resources that talk to real APIs. Even so, <code>terraform_data</code> plus <code>local-exec</code> is a fine way to glue in a command that has no provider, as Chapter 4 does with <code>kind load</code>.</p>
 </div></div>
 <h2 id="key-points">Key Points</h2>
 <ul>
 <li>A configuration describes an end state, not steps. Applying it twice is safe.</li>
 <li>The loop is <code>init</code>, <code>plan</code>, <code>apply</code>, and eventually <code>destroy</code>. Read the plan summary line first.</li>
-<li>State is the tool’s memory of what it created. Never edit it by hand, never commit it, and never lose it.</li>
+<li>State is OpenTofu’s memory of what it created. Never edit it by hand, never commit it, and never lose it.</li>
 <li>A <code>resource</code> is a thing that should exist; <code>terraform_data</code> is a placeholder resource that exists so you can attach behavior to it.</li>
 <li><code>variable</code> blocks are the inputs and <code>output</code> blocks are the return values of a configuration.</li>
 <li>Validation happens in layers: <code>fmt</code> for style, <code>validate</code> for structure, <code>validation</code> blocks for values, and <code>plan</code> for reality.</li>
@@ -1067,7 +1067,7 @@ Apply complete! Resources: 0 added, 0 changed, 0 destroyed.</pre>
 </tr>
 <tr>
 <td style="text-align: left;"><code>terraform { required_version = "&gt;= 1.6" }</code></td>
-<td style="text-align: left;">Settings for the tool itself</td>
+<td style="text-align: left;">Settings for OpenTofu itself</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>variable "NAME" { type, default, description }</code></td>
@@ -1109,7 +1109,7 @@ Apply complete! Resources: 0 added, 0 changed, 0 destroyed.</pre>
 </ul>
 <h2 id="exercises-1">Exercises</h2>
 <ol type="1">
-<li><p><strong>Think about it:</strong> <code>tofu apply</code> prints hello world the first time and nothing the second time. Explain what the tool compared to decide there was nothing to do, and where each side of the comparison came from.</p></li>
+<li><p><strong>Think about it:</strong> <code>tofu apply</code> prints hello world the first time and nothing the second time. Explain what OpenTofu compared to decide there was nothing to do, and where each side of the comparison came from.</p></li>
 <li><p><strong>What does this do?</strong> Given this configuration and a fresh directory, what does <code>tofu apply -auto-approve</code> print, in order?</p>
 <div class="sourceCode" id="cb7"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;terraform_data&quot;</span> <span class="st">&quot;first&quot;</span> {</span>
 <span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">provisioner</span> <span class="st">&quot;local-exec&quot;</span> {</span>
@@ -1139,7 +1139,7 @@ Apply complete! Resources: 0 added, 0 changed, 0 destroyed.</pre>
 <li><p><strong>Write a configuration</strong> with a variable <code>path</code> that must end in <code>.txt</code> (use <code>endswith</code>), and a resource that writes the current date into that file with <code>date &gt; path</code>. Make sure a second apply does not rewrite the file, and that changing <code>path</code> does.</p></li>
 </ol>
 <h1 id="a-web-server-on-your-machine">A Web Server on Your Machine</h1>
-<p><strong>The need.</strong> A configuration that only runs <code>echo</code> is talking to itself. Real things live behind APIs: a container runtime, a cloud, a DNS service. The tool cannot know every API, so it needs a way to load the vocabulary for each one, to pin which version of that vocabulary everyone uses, and to authenticate without putting credentials in the files. Several resources depend on one another, values have to be computed from other values, and something has to test that the result actually works.</p>
+<p><strong>The need.</strong> A configuration that only runs <code>echo</code> is talking to itself. Real things live behind APIs: a container runtime, a cloud, a DNS service. OpenTofu cannot know every API, so it needs a way to load the vocabulary for each one, to pin which version of that vocabulary everyone uses, and to authenticate without putting credentials in the files. Several resources depend on one another, values have to be computed from other values, and something has to test that the result actually works.</p>
 <p><strong>Why it matters.</strong> Providers are how one language reaches every cloud and service, and version pinning is what makes a configuration produce the same result on a colleague’s machine next year. Dependencies derived from references replace the carefully ordered steps of a script. A check that runs after every apply is the difference between “it applied” and “it works”.</p>
 <p><strong>Why it is hard.</strong> Every provider has its own authentication and its own release cadence, and a new major version can rename arguments. The order of operations is nowhere written down; it has to be inferred from what refers to what. A change in an input, like an edited source file, has to turn into a rebuild without anyone tracking it by hand.</p>
 <p><strong>The strategy.</strong> Load providers through <code>required_providers</code> with constrained versions and a lock file, keep credentials in the environment, and let references between resources build the dependency graph. Compute derived values with locals and functions, and finish with a <code>check</code> block that tests the result. The example that exercises all of it is a small Go web server: the Docker provider builds its image and runs the container, and the HTTP provider verifies that it answers.</p>
@@ -1227,11 +1227,11 @@ Hello, World!</pre>
 - Installing kreuzwerker/docker v3.9.0...</pre>
 <p>Two new things appear in <code>webserver</code>. <code>.terraform/</code> holds the downloaded plugins; it is a cache and belongs in <code>.gitignore</code>. <code>.terraform.lock.hcl</code> is the <strong>dependency lock file</strong>: it records the exact provider versions that were selected and their checksums, so that everyone who runs <code>init</code> on this configuration gets the same providers. In a real project you commit the lock file; Appendix A has the details, including what to do for colleagues on other platforms.</p>
 <h2 id="files-and-the-graph">Files and the graph</h2>
-<p>Every <code>.tf</code> file in <code>webserver</code> is part of the same configuration. The tool takes the union of all of them, as if they were one file, and then works out the order of operations from the <strong>references</strong> between blocks, not from the order of files or lines. You could put every block in a single <code>main.tf</code> and nothing would change; splitting the configuration into <code>versions.tf</code>, <code>providers.tf</code>, <code>variables.tf</code>, and <code>main.tf</code> is only for humans.</p>
+<p>Every <code>.tf</code> file in <code>webserver</code> is part of the same configuration. OpenTofu takes the union of all of them, as if they were one file, and then works out the order of operations from the <strong>references</strong> between blocks, not from the order of files or lines. You could put every block in a single <code>main.tf</code> and nothing would change; splitting the configuration into <code>versions.tf</code>, <code>providers.tf</code>, <code>variables.tf</code>, and <code>main.tf</code> is only for humans.</p>
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
 <span class="callout-icon callout-wut" role="img" aria-label="wut"></span>
 <div style="flex: 1; min-width: 0;">
-<p><strong>Wut:</strong> There is no “top” of a configuration. You can refer to a resource defined in another file, or later in the same file, and the tool builds a dependency graph from every reference. If A mentions B, then B is created before A and destroyed after it. That single rule replaces most of the ordering you would write by hand in a script.</p>
+<p><strong>Wut:</strong> There is no “top” of a configuration. You can refer to a resource defined in another file, or later in the same file, and OpenTofu builds a dependency graph from every reference. If A mentions B, then B is created before A and destroyed after it. That single rule replaces most of the ordering you would write by hand in a script.</p>
 </div></div>
 <p><code>variables.tf</code> declares the one input:</p>
 <div class="sourceCode" id="cb13"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="kw">variable</span> <span class="st">&quot;port&quot;</span> {</span>
@@ -1268,7 +1268,7 @@ Hello, World!</pre>
 <p> A <code>locals</code> block defines <strong>local values</strong>: named expressions. Where a variable is set by the user, a local is computed by the configuration. Use one whenever you would otherwise write the same expression twice, or when an expression deserves a name. They are referenced as <code>local.NAME</code> (singular, which trips people up).</p>
 <p> <code>path.module</code> is the directory containing the configuration, so <code>"${path.module}/app"</code> is the <code>app</code> directory no matter where you run <code>tofu</code> from.</p>
 <p> <code>app_hash</code> is the first expression with real machinery in it, so read it from the inside out. <code>fileset(dir, "**")</code> returns the set of every file under a directory. <code>[for f in ... : filesha1(...)]</code> is a <strong>for expression</strong>: it produces a new list by evaluating the expression after the colon once for each element. If you know list comprehensions from Python, it is the same idea with the <code>for</code> moved to the front: Python’s <code>[expr for x in xs]</code> is written <code>[for x in xs : expr]</code> here. <code>join("", ...)</code> concatenates the hashes and <code>sha1</code> boils them down to one string that changes whenever any file in <code>app/</code> changes.</p>
-<p><code>docker_image</code> is a resource type defined by the Docker provider, and the prefix before the first underscore is how you can tell: a type name starts with the name of the provider that defines it. That prefix is also what tells the tool which plugin the block belongs to. The provider defines a family of such types, <code>docker_container</code>, <code>docker_network</code>, and <code>docker_volume</code> among them, each with its own arguments and attributes, and the provider’s documentation lists all of them <span class="citation" data-cites="DockerProviderDocs">[1]</span>.</p>
+<p><code>docker_image</code> is a resource type defined by the Docker provider, and the prefix before the first underscore is how you can tell: a type name starts with the name of the provider that defines it. That prefix is also what tells OpenTofu which plugin the block belongs to. The provider defines a family of such types, <code>docker_container</code>, <code>docker_network</code>, and <code>docker_volume</code> among them, each with its own arguments and attributes, and the provider’s documentation lists all of them <span class="citation" data-cites="DockerProviderDocs">[1]</span>.</p>
 <p>The <code>build</code> block tells the Docker provider to build the image from that directory instead of pulling it. <code>triggers</code> is a map of values that force a rebuild when they change, and the source hash is the natural thing to put there. Without it, editing <code>main.go</code> would not rebuild anything, because the provider has no way to know the source changed.</p>
 <h2 id="running-the-container">Running the container</h2>
 <p> Add the container to <code>main.tf</code>, after the image:</p>
@@ -1281,7 +1281,7 @@ Hello, World!</pre>
 <span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>    external <span class="op">=</span> <span class="va">var</span>.port</span>
 <span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>  }</span>
 <span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
-<p> <code>image = docker_image.web.image_id</code> is a <strong>reference</strong> to another resource’s attribute. It does two things at once: it supplies the value, and it tells the tool that the container depends on the image, so the image is built first. Attributes like <code>image_id</code> are only known after the image exists, which is why plans show them as <code>(known after apply)</code>.</p>
+<p> <code>image = docker_image.web.image_id</code> is a <strong>reference</strong> to another resource’s attribute. It does two things at once: it supplies the value, and it tells OpenTofu that the container depends on the image, so the image is built first. Attributes like <code>image_id</code> are only known after the image exists, which is why plans show them as <code>(known after apply)</code>.</p>
 <p><code>ports</code> is a <strong>nested block</strong>, a block inside a resource that groups related arguments. A resource type can allow several of the same nested block, and a container with two published ports has two <code>ports</code> blocks.</p>
 <p>The two arguments are two sides of one door. <code>internal</code> is the port inside the container, the one the program listens on; <code>external</code> is the port on your machine that Docker connects to it. The web server always listens on 8080, so <code>internal</code> is fixed, but nothing outside the container has to know that: the container can publish it as any port you like, which is why <code>external</code> comes from a variable and <code>internal</code> does not. Set <code>port</code> to 9000 and <code>http://localhost:9000/</code> reaches a server that still thinks it is on 8080.</p>
 <h2 id="checking-the-result">Checking the result</h2>
@@ -1401,7 +1401,7 @@ Hello, World!</pre>
     }
 
 Plan: 2 to add, 0 to change, 2 to destroy.</pre>
-<p>The source hash changed, so the image is replaced; the image id will change, so the container is replaced. Run <code>tofu apply</code>, and the old server shuts down while a new one starts. That plan is the whole point of the chapter: from one edit to a Go file, the tool worked out the two things that have to happen.</p>
+<p>The source hash changed, so the image is replaced; the image id will change, so the container is replaced. Run <code>tofu apply</code>, and the old server shuts down while a new one starts. That plan is the whole point of the chapter: from one edit to a Go file, OpenTofu worked out the two things that have to happen.</p>
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
 <span class="callout-icon callout-tip" role="img" aria-label="tip"></span>
 <div style="flex: 1; min-width: 0;">
@@ -1428,7 +1428,7 @@ Destroy complete! Resources: 2 destroyed.</pre>
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
 <span class="callout-icon callout-trap" role="img" aria-label="trap"></span>
 <div style="flex: 1; min-width: 0;">
-<p><strong>Trap:</strong> <code>tofu destroy</code> destroys everything in the state, and in later chapters that includes a database full of data and a machine in the cloud. For things you want to keep, add <code>lifecycle { prevent_destroy = true }</code> to the resource, which makes any plan that would destroy it fail. Alternatively, <code>tofu state rm ADDRESS</code> makes the tool forget a resource without deleting it, and a later <code>tofu apply</code> will then try to create it again.</p>
+<p><strong>Trap:</strong> <code>tofu destroy</code> destroys everything in the state, and in later chapters that includes a database full of data and a machine in the cloud. For things you want to keep, add <code>lifecycle { prevent_destroy = true }</code> to the resource, which makes any plan that would destroy it fail. Alternatively, <code>tofu state rm ADDRESS</code> makes OpenTofu forget a resource without deleting it, and a later <code>tofu apply</code> will then try to create it again.</p>
 </div></div>
 <h2 id="key-points-1">Key Points</h2>
 <ul>
@@ -1542,12 +1542,12 @@ Destroy complete! Resources: 2 destroyed.</pre>
 <li><p><strong>Write a configuration</strong> that runs two copies of the web server on ports 8080 and 8081 from the same image, with a check for each. Then reduce the duplication with a variable of type <code>list(number)</code> and <code>count</code> (look it up), and compare the plans.</p></li>
 </ol>
 <h1 id="a-database-of-sayings">A Database of Sayings</h1>
-<p><strong>The need.</strong> A configuration does not only wire values through; sometimes it has to produce them: generate data, render a file, make a password. Secrets must exist without appearing in any file you edit, and must be marked so that the tool keeps them off the screen. Some dependencies are invisible to providers, like “new seed data means a new volume”, and some assumptions deserve to fail the plan rather than fail an hour later. And “created” must mean “ready”, or everything downstream starts too early.</p>
-<p><strong>Why it matters.</strong> Expressions and templates keep the configuration the single source of truth for derived data, instead of a checked-in file that drifts. The <code>random</code> provider and <code>sensitive</code> are how secrets are generated once and handled carefully everywhere after. Lifecycle rules, preconditions, and explicit dependencies are the tools for the ordering and rebuild logic that providers cannot infer.</p>
-<p><strong>Why it is hard.</strong> Generated data has to be escaped, counted, and checked before it can be trusted. A secret in state is still a secret, and the tool’s notion of sensitivity ends at the terminal. Replacement chains have to be stated exactly, or a change rebuilds too little (stale data) or too much (a rebuilt web server for every edit). Readiness is not existence, and a provider has to be told what “healthy” means.</p>
+<p><strong>The need.</strong> A configuration does not only wire values through; sometimes it has to produce them: generate data, render a file, make a password. Secrets must exist without appearing in any file you edit, and must be marked so that OpenTofu keeps them off the screen. Some dependencies are invisible to providers, like “new seed data means a new volume”, and some assumptions deserve to fail the plan rather than fail an hour later. And “created” must mean “ready”, or everything downstream starts too early.</p>
+<p><strong>Why it matters.</strong> Expressions and templates keep the configuration the single source of truth for derived data, instead of a checked-in file that drifts. The <code>random</code> provider and <code>sensitive</code> are how a secret is generated once and then handled carefully wherever it goes. Lifecycle rules, preconditions, and explicit dependencies are the tools for the ordering and rebuild logic that providers cannot infer.</p>
+<p><strong>Why it is hard.</strong> Generated data has to be escaped, counted, and checked before it can be trusted. A secret in state is still a secret, and OpenTofu’s notion of sensitivity ends at the terminal. Replacement chains have to be stated exactly, or a change rebuilds too little (stale data) or too much (a rebuilt web server for every edit). Readiness is not existence, and a provider has to be told what “healthy” means.</p>
 <p><strong>The strategy.</strong> Pull the two word lists from the booklet’s public repository with a <code>module</code> block, combine them with <code>setproduct</code> and a <code>for</code> expression, render the SQL with <code>templatefile</code>, write it with <code>local_file</code>, and guard it with a <code>precondition</code>. Generate the password with <code>random_password</code>, mark it sensitive, and pass it only where it is needed. State the invisible dependency with <code>replace_triggered_by</code>, the ordering with <code>depends_on</code>, and readiness with a health check that creation waits on. The example is a MySQL database seeded with 3600 sayings, one per second of the hour, and the web server from Chapter 2 rewritten to look up the saying for the current time.</p>
 <h2 id="two-more-providers">Two more providers</h2>
-<p> Chapter 2 used one provider that talks to a real system. This chapter adds two that do not talk to anything: they exist so that a configuration can produce values and files of its own. Neither is built into the tool (Appendix B lists what is); both come from the registry, so <code>versions.tf</code> in the <code>database</code> directory grows two entries:</p>
+<p> Chapter 2 used one provider that talks to a real system. This chapter adds two that do not talk to anything: they exist so that a configuration can produce values and files of its own. Neither is built into OpenTofu; both come from the registry, so <code>versions.tf</code> in the <code>database</code> directory grows two entries:</p>
 <div class="sourceCode" id="cb21"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="kw">terraform</span> {</span>
 <span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">required_version</span> <span class="op">=</span> <span class="st">&quot;&gt;= 1.6&quot;</span></span>
 <span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -1575,7 +1575,7 @@ Destroy complete! Resources: 2 destroyed.</pre>
 <p>The <strong>random</strong> provider generates values: <code>random_password</code> and <code>random_string</code> for text, <code>random_integer</code>, <code>random_id</code>, <code>random_uuid</code>, and <code>random_pet</code> for the kind of names Docker gives containers <span class="citation" data-cites="RandomProviderDocs">[2]</span>. What makes them resources rather than functions is memory. A function like <code>uuid()</code> gives a new answer every time it is evaluated; a <code>random_password</code> resource generates its value once, when it is created, stores it in state, and hands back the same value on every later plan until the resource is replaced. That is the property a password needs, and <code>random_password</code> marks its <code>result</code> as sensitive so that it stays off the screen.</p>
 <p>The <strong>local</strong> provider works with files on the machine running <code>tofu</code>: <code>local_file</code> writes a file with a given <code>content</code> to a given <code>filename</code>, and <code>local_sensitive_file</code> does the same without echoing the content in plans <span class="citation" data-cites="LocalProviderDocs LocalFile">[3], [4]</span>. The file is a resource like any other: created on apply, replaced when its content changes, and deleted on destroy. This chapter uses it to write the SQL that seeds the database, so that the seed is generated from the configuration rather than checked in by hand.</p>
 <h2 id="the-lifecycle-block">The lifecycle block</h2>
-<p> Every argument you have written so far belonged to a resource type and was handed to its provider. A few arguments belong to the tool instead, and are accepted by every resource regardless of type; these are the <strong>meta-arguments</strong>, and <code>depends_on</code> from Chapter 2 is one of them. The <code>lifecycle</code> block collects the rest <span class="citation" data-cites="OTF_Lifecycle">[5]</span>:</p>
+<p> Every argument you have written so far belonged to a resource type and was handed to its provider. A few arguments belong to OpenTofu instead, and are accepted by every resource regardless of type; these are the <strong>meta-arguments</strong>, and <code>depends_on</code> from Chapter 2 is one of them. The <code>lifecycle</code> block collects the rest <span class="citation" data-cites="OTF_Lifecycle">[5]</span>:</p>
 <table>
 <colgroup>
 <col style="width: 63%" />
@@ -1584,7 +1584,7 @@ Destroy complete! Resources: 2 destroyed.</pre>
 <thead>
 <tr>
 <th style="text-align: left;">Setting</th>
-<th style="text-align: left;">What it tells the tool</th>
+<th style="text-align: left;">What it tells OpenTofu</th>
 </tr>
 </thead>
 <tbody>
@@ -1614,13 +1614,13 @@ Destroy complete! Resources: 2 destroyed.</pre>
 </tr>
 </tbody>
 </table>
-<p>The way to think about them: a provider knows how its own resource type behaves, but it cannot know how your resources relate to each other or what you are assuming about them. <code>lifecycle</code> is where you write that down. <code>replace_triggered_by</code> expresses a relationship the provider cannot see (new seed data means a new volume); <code>precondition</code> and <code>postcondition</code> express assumptions and guarantees as expressions that fail the plan or the apply with your own error message <span class="citation" data-cites="OTF_CustomConditions">[6]</span>; <code>prevent_destroy</code> and <code>ignore_changes</code> express intent about how the resource may change. This chapter uses <code>replace_triggered_by</code> and <code>precondition</code>; the others appear in Appendix A’s advice on stateful resources and drift.</p>
+<p>The way to think about them: a provider knows how its own resource type behaves, but it cannot know how your resources relate to each other or what you are assuming about them. <code>lifecycle</code> is where you write that down. <code>replace_triggered_by</code> expresses a relationship the provider cannot see, like new seed data meaning a new volume. <code>precondition</code> and <code>postcondition</code> express assumptions and guarantees as expressions that fail the plan or the apply with your own error message <span class="citation" data-cites="OTF_CustomConditions">[6]</span>. <code>prevent_destroy</code> and <code>ignore_changes</code> express intent about how the resource may change. This chapter uses <code>replace_triggered_by</code> and <code>precondition</code>; the others appear in Appendix A’s advice on stateful resources and drift.</p>
 <h2 id="a-module-from-github">A module from GitHub</h2>
-<p> The raw material for the sayings is two word lists, sixty lines each, and they live in this booklet’s repository on GitHub, in <code>examples/motd</code>. Rather than copy them, the configuration pulls them from there with a <code>module</code> block:</p>
+<p> The sayings are built from two word lists of sixty lines each, which live in this booklet’s repository on GitHub, in <code>examples/motd</code>. Rather than copy them, the configuration pulls them from there with a <code>module</code> block:</p>
 <div class="sourceCode" id="cb22"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="kw">module</span> <span class="st">&quot;sayings&quot;</span> {</span>
 <span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">source</span> <span class="op">=</span> <span class="st">&quot;github.com/BooksByGorgo/opentofu//tasting/examples/motd?ref=main&quot;</span></span>
 <span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
-<p>A <strong>module</strong> is a directory of configuration with inputs and outputs. The directory you run <code>tofu</code> in is the <strong>root module</strong>; any directory it pulls in with a <code>module</code> block is a <strong>child module</strong>. If a resource is a noun and a configuration is a paragraph, a module is a function: its variables are the parameters, its resources are the body, and its outputs are the return values. Calling one means writing a <code>module</code> block, and the call’s result is the child’s outputs, available as <code>module.NAME.OUTPUT</code>.</p>
+<p>A <strong>module</strong> is a directory of configuration with inputs and outputs. The directory you run <code>tofu</code> in is the <strong>root module</strong>; any directory it pulls in with a <code>module</code> block is a <strong>child module</strong>. A module is a function: its variables are the parameters, its resources are the body, and its outputs are the return values. Calling one means writing a <code>module</code> block, and the call’s result is the child’s outputs, available as <code>module.NAME.OUTPUT</code>.</p>
 <p>The <code>source</code> says where the directory comes from <span class="citation" data-cites="OTF_ModuleSources">[7]</span>: a GitHub repository, <code>//</code> followed by the path inside it, and <code>?ref=</code> naming the branch, tag, or commit to take. Local paths and the module registry are the other kinds of source, and Chapter 4 uses the first of them. <code>tofu init</code> clones the repository over HTTPS, which for a public repository needs no token and no account, and puts the directory under <code>.terraform/modules</code>:</p>
 <pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ tofu init</b>
 Initializing modules...
@@ -1672,14 +1672,14 @@ Downloading git::https://github.com/BooksByGorgo/opentofu.git?ref=main for sayin
 <span id="cb23-42"><a href="#cb23-42" aria-hidden="true" tabindex="-1"></a>    error_message <span class="op">=</span> <span class="st">&quot;need exactly 3600 sayings, one per second of the hour.&quot;</span></span>
 <span id="cb23-43"><a href="#cb23-43" aria-hidden="true" tabindex="-1"></a>  }</span>
 <span id="cb23-44"><a href="#cb23-44" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
-<p>This module has no variables and no resources at all; it is a function with no parameters that returns data. The two <code>locals</code> read the word lists with <code>file</code> and split them into one entry per line; <code>path.module</code> inside a module is the module’s own directory, not the root’s, even when that directory is a checkout under <code>.terraform/modules</code>. The rest of the file is outputs, and outputs are all a caller can see: the two lists, the 3600 sayings that <code>setproduct</code> makes of them (explained next), and the finished SQL, rendered by <code>templatefile</code> (explained in the seed file section) and guarded by a <code>precondition</code> on the output, which is where that assumption belongs. This chapter takes the lists and does the rest itself, to learn the pieces; Chapters 4 and 5 take the finished SQL.</p>
+<p>This module has no variables and no resources at all; it is a function with no parameters that returns data. The two <code>locals</code> read the word lists with <code>file</code> and split them into one entry per line; <code>path.module</code> inside a module is the module’s own directory, not the root’s, even when that directory is a checkout under <code>.terraform/modules</code>. The rest of the file is outputs, and outputs are all a caller can see: the two lists, the 3600 sayings that <code>setproduct</code> makes of them, and the finished SQL rendered by <code>templatefile</code>. Both functions are explained below, <code>setproduct</code> next and <code>templatefile</code> in the seed file section. The <code>precondition</code> sits on the <code>sql</code> output, which is where that assumption belongs. This chapter takes the lists and does the rest itself, so that you learn the pieces; Chapters 4 and 5 take the finished SQL.</p>
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
 <span class="callout-icon callout-tip" role="img" aria-label="tip"></span>
 <div style="flex: 1; min-width: 0;">
 <p><strong>Tip:</strong> <code>?ref=main</code> takes whatever is on the branch today, which is fine for a booklet and wrong for anything that must build the same way twice. A module source is code you run, so in real work pin <code>ref</code> to a tag or a commit hash, and move it on purpose.</p>
 </div></div>
 <h2 id="the-sayings">The sayings</h2>
-<p> Writing 3600 sayings by hand is not going to happen. Sixty sentence beginnings (<code>A patient programmer</code>, <code>The wise sysadmin</code>, …) and sixty endings (<code>never blames the compiler.</code>, <code>starts every day with a backup.</code>, …), with every beginning paired with every ending, is 120 lines for 3600 sayings, and the results have the earnest nonsense quality of a real fortune file. This chapter’s configuration lives in a new directory, <code>database</code>, and the module block and the pairing go in <code>sayings.tf</code> there:</p>
+<p> Writing 3600 sayings by hand is not going to happen. Sixty sentence beginnings (<code>A patient programmer</code>, <code>The wise sysadmin</code>, …) and sixty endings (<code>never blames the compiler.</code>, <code>starts every day with a backup.</code>, …) are 120 lines of input. Pairing every beginning with every ending turns them into 3600 sayings, and the results have the earnest nonsense quality of a real fortune file. This chapter’s configuration lives in a new directory, <code>database</code>, and the module block and the pairing go in <code>sayings.tf</code> there:</p>
 <div class="sourceCode" id="cb24"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="co"># the prefix and suffix lists live in the booklet&#39;s public repository</span></span>
 <span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a><span class="kw">module</span> <span class="st">&quot;sayings&quot;</span> {</span>
 <span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a>  <span class="kw">source</span> <span class="op">=</span> <span class="st">&quot;github.com/BooksByGorgo/opentofu//tasting/examples/motd?ref=main&quot;</span></span>
@@ -1744,7 +1744,7 @@ INSERT INTO sayings (id, saying) VALUES
 <span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a>  <span class="bu">length</span>  <span class="op">=</span> <span class="dv">24</span></span>
 <span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a>  special <span class="op">=</span> <span class="va">false</span> <span class="co"># keeps the password safe to paste into a DSN</span></span>
 <span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
-<p>As the overview said, the value is generated once and remembered in state, so the password is the same on every plan until you replace the resource. That is what you want: a password that is generated once, never typed, and never written into a file you edit.</p>
+<p>As you saw earlier, the value is generated once and remembered in state, so the password is the same on every plan until you replace the resource. That is what you want: a password that is generated once, never typed, and never written into a file you edit.</p>
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
 <span class="callout-icon callout-wut" role="img" aria-label="wut"></span>
 <div style="flex: 1; min-width: 0;">
@@ -1826,7 +1826,7 @@ INSERT INTO sayings (id, saying) VALUES
 <p>This is the biggest resource so far, and every part earns its place.</p>
 <p>The <code>docker_image</code> without a <code>build</code> block pulls the image from Docker Hub. The environment variables are the MySQL image’s own interface: it creates the database and the user on first start, and it generates a root password you never need.</p>
 <p>The <code>networks_advanced</code> block joins the network and gives the container the alias <code>db</code>, so that the web server can use <code>db</code> as a host name without caring what the container is called.</p>
-<p>Two <code>volumes</code> blocks mount two things: the named volume for the data, and the directory holding the seed file, mounted where the MySQL image looks for initialization scripts. Docker needs an absolute path for a bind mount, so <code>dirname</code> takes the seed file’s directory and <code>abspath</code> makes it absolute. Referencing <code>local_file.seed.filename</code> also makes sure the file is written before the container starts.</p>
+<p>Two <code>volumes</code> blocks mount two things: the named volume for the data, and the directory holding the seed file, which goes where the MySQL image looks for initialization scripts. Docker needs an absolute path for a bind mount, so <code>dirname</code> takes the seed file’s directory and <code>abspath</code> makes it absolute. Referencing <code>local_file.seed.filename</code> also makes sure the file is written before the container starts.</p>
 <p> The <code>healthcheck</code> block defines what “healthy” means, and <code>wait = true</code> makes the provider hold the resource in “Creating” until the health check passes. Pinging <code>127.0.0.1</code> rather than <code>localhost</code> matters: while MySQL is loading seed scripts it runs a temporary server that only listens on a Unix socket, and pinging over TCP fails until the real server is up. So when this resource is “created”, the sayings are loaded and the database is accepting connections.</p>
 <p>The final <code>replace_triggered_by</code> completes the chain: seed file replaced, so volume replaced, so container replaced.</p>
 <h2 id="the-web-server">The web server</h2>
@@ -1877,7 +1877,7 @@ INSERT INTO sayings (id, saying) VALUES
 <span id="cb31-44"><a href="#cb31-44" aria-hidden="true" tabindex="-1"></a>    log<span class="op">.</span>Fatal<span class="op">(</span>http<span class="op">.</span>ListenAndServe<span class="op">(</span>addr<span class="op">,</span> <span class="ot">nil</span><span class="op">))</span></span>
 <span id="cb31-45"><a href="#cb31-45" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <p>Two details are there because of the container. <code>sql.Open</code> does not connect until the first query, so the server starts even if the database is not ready, and answers 503 until it is. And <code>time/tzdata</code> embeds the time zone database, because the <code>scratch</code> image has no <code>/usr/share/zoneinfo</code>, and without it <code>TZ=America/Los_Angeles</code> silently means UTC.</p>
-<p>Add the driver with <code>go get github.com/go-sql-driver/mysql</code>, which updates <code>go.mod</code> and creates <code>go.sum</code>; change the Dockerfile’s <code>COPY go.mod ./</code> to <code>COPY go.mod go.sum ./</code>.</p>
+<p>Add the driver with <code>go get github.com/go-sql-driver/mysql</code>, which updates <code>go.mod</code> and creates <code>go.sum</code>. Then change the Dockerfile’s <code>COPY go.mod ./</code> to <code>COPY go.mod go.sum ./</code>.</p>
 <p>The container, in <code>web.tf</code>, reuses the image build from Chapter 2 (now tagged <code>motd:ch3</code>) and adds an environment and a network:</p>
 <div class="sourceCode" id="cb32"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;docker_container&quot;</span> <span class="st">&quot;web&quot;</span> {</span>
 <span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a>  name  <span class="op">=</span> <span class="st">&quot;motd-web&quot;</span></span>
@@ -1899,8 +1899,8 @@ INSERT INTO sayings (id, saying) VALUES
 <span id="cb32-18"><a href="#cb32-18" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb32-19"><a href="#cb32-19" aria-hidden="true" tabindex="-1"></a>  <span class="at">depends_on</span> <span class="op">=</span> [docker_container.db]</span>
 <span id="cb32-20"><a href="#cb32-20" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
-<p>The DSN names the database <code>db</code>, which is the alias on the shared network, and pastes in the generated password. <code>timezone</code> is a new variable with the default <code>America/Los_Angeles</code>; set it to yours.</p>
-<p> <code>depends_on</code> is an <strong>explicit dependency</strong>. Nothing in this block references the database container, so the tool would happily start the web server first. <code>depends_on</code> says: wait for that one anyway. Use it only when there is no attribute you can reference, because a reference is both a dependency and documentation of why.</p>
+<p>The DSN names the host <code>db</code>, which is the alias on the shared network, and pastes in the generated password. <code>timezone</code> is a new variable with the default <code>America/Los_Angeles</code>; set it to yours.</p>
+<p> <code>depends_on</code> is an <strong>explicit dependency</strong>. Nothing in this block references the database container, so OpenTofu would happily start the web server first. <code>depends_on</code> says: wait for that one anyway. Use it only when there is no attribute you can reference, because a reference is both a dependency and documentation of why.</p>
 <p>The check follows the same pattern as Chapter 2 with a stricter assertion:</p>
 <div class="sourceCode" id="cb33"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a>  assert {</span>
 <span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a>    condition <span class="op">=</span> <span class="bu">can</span>(<span class="bu">regex</span>(</span>
@@ -1942,7 +1942,7 @@ Plan: 3 to add, 0 to change, 3 to destroy.</pre>
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
 <span class="callout-icon callout-trap" role="img" aria-label="trap"></span>
 <div style="flex: 1; min-width: 0;">
-<p><strong>Trap:</strong> A container that was started by hand with <code>docker run --name motd-db</code> makes apply fail with <code>Conflict. The container name "/motd-db" is already in use</code>. The tool only knows about containers it created. Remove the stray one, or <code>tofu import</code> it (Appendix A), and apply again.</p>
+<p><strong>Trap:</strong> A container that was started by hand with <code>docker run --name motd-db</code> makes apply fail with <code>Conflict. The container name "/motd-db" is already in use</code>. OpenTofu only knows about containers it created. Remove the stray one, or <code>tofu import</code> it (Appendix A), and apply again.</p>
 </div></div>
 <h2 id="key-points-2">Key Points</h2>
 <ul>
@@ -2059,9 +2059,9 @@ ${i}:${n}${i &lt; length(names) - 1 ? &quot;,&quot; : &quot;&quot;}
 <li><p><strong>Write a configuration</strong> that adds a second table, <code>visits</code>, seeded from a template with one row per weekday, and a second <code>check</code> that queries the database through <code>docker exec</code> in a <code>terraform_data</code> provisioner. Decide whether the provisioner or an <code>http</code> data source is the better tool, and say why.</p></li>
 </ol>
 <h1 id="kubernetes">Kubernetes</h1>
-<p><strong>The need.</strong> A configuration that has grown past a screenful needs the same thing a program does at that size: functions. Groups of resources that belong together should be defined once, take parameters, return values, and be called from more than one place. Some parameters are optional and turn whole blocks on or off. And as the number of objects grows, the tool needs a reliable signal that something changed, so that an updated artifact becomes a visible plan line and not a silent no-op.</p>
-<p><strong>Why it matters.</strong> Modules are how a configuration is reused across environments instead of copied, and how a team divides responsibility: the root decides where things go, a module decides what goes there. Optional blocks are what let one module serve callers with different needs. A content-addressed name turns “rebuild” into a change the tool can plan, which is the difference between a rollout and a stale deployment.</p>
-<p><strong>Why it is hard.</strong> A module has to be general enough to reuse and specific enough to stay simple, and nested blocks cannot be made conditional without new syntax. Providers are configured in one place and used in another, which is a rule that has to be learned. Objects depend on each other by name, images have to reach the cluster, storage binds lazily, and readiness has to be defined before the tool can wait for it.</p>
+<p><strong>The need.</strong> A configuration that has grown past a screenful needs the same thing a program does at that size: functions. Groups of resources that belong together should be defined once, take parameters, return values, and be called from more than one place. Some parameters are optional and turn whole blocks on or off. And as the number of objects grows, OpenTofu needs a reliable signal that something changed, so that an updated artifact becomes a visible plan line and not a silent no-op.</p>
+<p><strong>Why it matters.</strong> Modules are how a configuration is reused across environments instead of copied, and how a team divides responsibility: the root decides where things go, a module decides what goes there. Optional blocks are what let one module serve callers with different needs. A content-addressed name turns “rebuild” into a change OpenTofu can plan, which is the difference between a rollout and a stale deployment.</p>
+<p><strong>Why it is hard.</strong> A module has to be general enough to reuse and specific enough to stay simple, and nested blocks cannot be made conditional without new syntax. Providers are configured in one place and used in another, which is a rule that has to be learned. Objects depend on each other by name, images have to reach the cluster, storage binds lazily, and readiness has to be defined before OpenTofu can wait for it.</p>
 <p><strong>The strategy.</strong> Write an application module with variables, outputs, and <code>dynamic</code> blocks for its optional parts, called from a root module that supplies the providers, the way Chapter 3 called the sayings module. Name the image by the hash of its source so that a rebuild changes the deployment. Let readiness probes sequence the rollout, the same idea as the health check in Chapter 3. The example is the sayings server deployed to a local Kubernetes cluster from <code>kind</code>, as a namespace, a secret, a config map, a volume claim, two deployments, and two services.</p>
 <h2 id="the-kubernetes-provider">The Kubernetes provider</h2>
 <p> The configuration in <code>kubernetes</code> swaps Chapter 3’s <code>local</code> provider for the Kubernetes provider, since the seed goes into a config map now rather than a file; <code>versions.tf</code>:</p>
@@ -2095,7 +2095,7 @@ ${i}:${n}${i &lt; length(names) - 1 ? &quot;,&quot; : &quot;&quot;}
 <span id="cb37-28"><a href="#cb37-28" aria-hidden="true" tabindex="-1"></a>  config_context <span class="op">=</span> <span class="st">&quot;kind-motd&quot;</span></span>
 <span id="cb37-29"><a href="#cb37-29" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
 <p>The Kubernetes provider has a resource type for every kind of Kubernetes object, named after it <span class="citation" data-cites="K8sProviderDocs">[8]</span>. This chapter uses six: <code>kubernetes_namespace_v1</code>, <code>kubernetes_secret_v1</code>, <code>kubernetes_config_map_v1</code>, <code>kubernetes_persistent_volume_claim_v1</code>, <code>kubernetes_deployment_v1</code>, and <code>kubernetes_service_v1</code>. The <code>_v1</code> suffix picks the newer implementation of each, which follows the Kubernetes API more strictly; use those for anything new. Every one of them has a <code>metadata</code> block for the name, namespace, and labels, and most have a <code>spec</code> block whose contents mirror the YAML you would otherwise write, so if you know the YAML you know the arguments, and the provider’s documentation reads like a translation table.</p>
-<p>Three things about how the provider behaves matter here. It waits: a deployment counts as created when its rollout completes and a volume claim when it is bound, and a <code>timeouts</code> block on the resource says how long to wait, since <code>timeouts</code> is defined by the provider rather than by the tool <span class="citation" data-cites="K8sProviderDeployment">[9]</span>. Its <code>provider</code> block points at a cluster through a kubeconfig file and a context name, so the same configuration can target another cluster by changing two lines. And it cannot put images into a cluster; the cluster pulls them, which is why getting the image there needs a step of its own.</p>
+<p>Three things about how the provider behaves matter here. It waits: a deployment counts as created when its rollout completes and a volume claim when it is bound, and a <code>timeouts</code> block on the resource says how long to wait, since <code>timeouts</code> is defined by the provider rather than by OpenTofu <span class="citation" data-cites="K8sProviderDeployment">[9]</span>. Its <code>provider</code> block points at a cluster through a kubeconfig file and a context name, so the same configuration can target another cluster by changing two lines. And it cannot put images into a cluster; the cluster pulls them, which is why getting the image there needs a step of its own.</p>
 <h2 id="a-cluster-to-deploy-to">A cluster to deploy to</h2>
 <p> <code>kind</code> runs a Kubernetes cluster inside Docker containers. This chapter’s configuration goes in <code>kubernetes</code>, with the modules in a sibling directory, <code>modules</code>. Install <code>kind</code> and <code>kubectl</code> (Chapter 0 has the commands for each system), then create a cluster from <code>kubernetes/kind-config.yaml</code>:</p>
 <div class="sourceCode" id="cb38"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a><span class="co"># a one-node cluster whose NodePort 30080 is reachable as localhost:8080</span></span>
@@ -2514,7 +2514,7 @@ Plan: 2 to add, 1 to change, 2 to destroy.</pre>
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
 <span class="callout-icon callout-trap" role="img" aria-label="trap"></span>
 <div style="flex: 1; min-width: 0;">
-<p><strong>Trap:</strong> <code>kubernetes_deployment_v1</code> waits for the rollout to finish, so a pod that never becomes ready makes apply sit there and then fail with <code>timed out waiting for the condition</code>. The reason is never in the tool’s output. Run <code>kubectl -n motd describe pod</code> and <code>kubectl -n motd logs</code> while it waits: an <code>ImagePullBackOff</code> means the tag was never loaded into the cluster, and a failing readiness probe usually means the database is not reachable under the name the DSN uses.</p>
+<p><strong>Trap:</strong> <code>kubernetes_deployment_v1</code> waits for the rollout to finish, so a pod that never becomes ready makes apply sit there and then fail with <code>timed out waiting for the condition</code>. The reason is never in OpenTofu’s output. Run <code>kubectl -n motd describe pod</code> and <code>kubectl -n motd logs</code> while it waits: an <code>ImagePullBackOff</code> means the tag was never loaded into the cluster, and a failing readiness probe usually means the database is not reachable under the name the DSN uses.</p>
 </div></div>
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
 <span class="callout-icon callout-trap" role="img" aria-label="trap"></span>
@@ -2592,7 +2592,7 @@ Plan: 2 to add, 1 to change, 2 to destroy.</pre>
 <li>Replace the database deployment with a <code>kubernetes_stateful_set_v1</code> and see what changes about the volume claim.</li>
 <li>Call the module twice from one root with different namespaces, and find out what breaks first. Then fix it.</li>
 <li>Write a <code>tofu test</code> file for the sayings module that asserts <code>length(output.sayings) == 3600</code> (look up the <code>run</code> block).</li>
-<li>Delete the web pods with <code>kubectl</code> and watch Kubernetes recreate them without any help from the configuration. Then run <code>tofu plan</code> and see whether the tool noticed.</li>
+<li>Delete the web pods with <code>kubectl</code> and watch Kubernetes recreate them without any help from the configuration. Then run <code>tofu plan</code> and see whether OpenTofu noticed.</li>
 </ul>
 <h2 id="exercises-4">Exercises</h2>
 <ol type="1">
@@ -3141,7 +3141,7 @@ Plan: 2 to add, 1 to change, 2 to destroy.</pre>
 <h1 id="conclusion">Conclusion</h1>
 <p>You started with a configuration that ran <code>echo</code> and ended with a service on the internet, with a name, a certificate, a database, and a rollout strategy, all described in files that a colleague could apply from nothing. Here are the key takeaways:</p>
 <ul>
-<li><strong>Describe the end state, not the steps.</strong> The tool computes the steps, shows them as a plan, and applies only the difference. Applying twice is safe.</li>
+<li><strong>Describe the end state, not the steps.</strong> OpenTofu computes the steps, shows them as a plan, and applies only the difference. Applying twice is safe.</li>
 <li><strong>State is memory.</strong> It maps your blocks to real things, it holds secrets, and it never goes into git.</li>
 <li><strong>Providers are the vocabulary.</strong> Every resource type comes from one, credentials come from the environment, and the lock file keeps everyone on the same versions.</li>
 <li><strong>References are dependencies.</strong> Order comes from what mentions what, and <code>depends_on</code> is for the rare case with nothing to mention.</li>
@@ -3163,7 +3163,7 @@ Plan: 2 to add, 1 to change, 2 to destroy.</pre>
 <p></p>
 <ul>
 <li><strong>One directory per root module, one state per root module.</strong> A root module is a unit of <code>apply</code>. Things with different lifecycles (a cluster and what runs on it, infrastructure and application) go in different root modules, as Chapters 4 and 5 do <span class="citation" data-cites="OTF_ModuleComposition TerraformStyle">[16], [17]</span>.</li>
-<li><strong>Use the conventional file names.</strong> <code>versions.tf</code> (the <code>terraform</code> block), <code>providers.tf</code>, <code>variables.tf</code>, <code>outputs.tf</code>, <code>main.tf</code>, and more files named for what they hold (<code>network.tf</code>, <code>dns.tf</code>). The tool does not care; the next reader does <span class="citation" data-cites="OTF_ModuleStructure TerraformStyle">[17], [18]</span>.</li>
+<li><strong>Use the conventional file names.</strong> <code>versions.tf</code> (the <code>terraform</code> block), <code>providers.tf</code>, <code>variables.tf</code>, <code>outputs.tf</code>, <code>main.tf</code>, and more files named for what they hold (<code>network.tf</code>, <code>dns.tf</code>). OpenTofu does not care; the next reader does <span class="citation" data-cites="OTF_ModuleStructure TerraformStyle">[17], [18]</span>.</li>
 <li><strong>Name resources for their role, not their type:</strong> <code>web</code>, not <code>web_container</code>. The type is already in the address. Use underscores in names, never dashes, and keep names short: they appear in every plan <span class="citation" data-cites="TerraformStyle OTF_Style">[17], [19]</span>.</li>
 <li><strong>Keep modules small and single purpose,</strong> with every variable described and every output named for what it is. A module is a function; write it like one <span class="citation" data-cites="OTF_ModuleStructure">[18]</span>.</li>
 <li><strong>Do not abstract too early.</strong> Three similar resources are fine. The third copy of a whole configuration is the moment to write a module <span class="citation" data-cites="OTF_ModuleDev">[20]</span>.</li>
@@ -3208,7 +3208,7 @@ Plan: 2 to add, 1 to change, 2 to destroy.</pre>
 <h3 id="changing-infrastructure">Changing infrastructure</h3>
 <p></p>
 <ul>
-<li><strong>Prefer immutable artifacts.</strong> An image tagged with its content hash (Chapter 4) is a change the tool can see; <code>latest</code> is not <span class="citation" data-cites="K8sImages K8sConfigBest">[46], [47]</span>.</li>
+<li><strong>Prefer immutable artifacts.</strong> An image tagged with its content hash (Chapter 4) is a change OpenTofu can see; <code>latest</code> is not <span class="citation" data-cites="K8sImages K8sConfigBest">[46], [47]</span>.</li>
 <li><strong>Provisioners are a last resort.</strong> They run only at creation, their failures leave resources tainted, and their commands are invisible to the plan. Prefer a provider, cloud-init, or a proper configuration management tool, and use <code>terraform_data</code> with <code>local-exec</code> for the small glue that has no better home <span class="citation" data-cites="OTF_Provisioners TF_TerraformData">[48], [49]</span>.</li>
 <li><strong>Make replacement chains explicit</strong> with <code>replace_triggered_by</code> when the provider cannot see the dependency (a seed file and the volume it loads into) <span class="citation" data-cites="OTF_Lifecycle">[5]</span>.</li>
 <li><strong>Add <code>precondition</code> and <code>postcondition</code> blocks</strong> for assumptions that would otherwise fail late, and <code>check</code> blocks for “did it work” <span class="citation" data-cites="OTF_CustomConditions OTF_Checks">[6], [50]</span>.</li>
@@ -3219,19 +3219,19 @@ Plan: 2 to add, 1 to change, 2 to destroy.</pre>
 <p></p>
 <ul>
 <li><code>tofu fmt -recursive</code> and <code>tofu validate</code> in a pre-commit hook <span class="citation" data-cites="OTF_Fmt OTF_Validate PreCommit">[51], [52], [53]</span>.</li>
-<li><strong>tflint</strong> for lint rules the tool does not enforce (unused variables, deprecated arguments, provider-specific checks) <span class="citation" data-cites="TFLint">[54]</span>.</li>
+<li><strong>tflint</strong> for lint rules OpenTofu does not enforce (unused variables, deprecated arguments, provider-specific checks) <span class="citation" data-cites="TFLint">[54]</span>.</li>
 <li><strong>trivy</strong> or <strong>checkov</strong> for security scanning of configurations (open security groups, unencrypted storage) <span class="citation" data-cites="Trivy Checkov">[55], [56]</span>.</li>
 <li><strong>terraform-docs</strong> to generate the variables and outputs tables of a module’s README from its files <span class="citation" data-cites="TerraformDocsTool">[57]</span>.</li>
 <li><strong>tenv</strong> (or a similar version manager) to install and switch between OpenTofu and Terraform versions per project <span class="citation" data-cites="Tenv">[58]</span>.</li>
 <li>An editor with the language server, which gives completion for every provider’s arguments <span class="citation" data-cites="OTF_LS">[59]</span>.</li>
 </ul>
-<h3 id="working-with-the-tool">Working with the tool</h3>
+<h3 id="working-with-opentofu">Working with OpenTofu</h3>
 <p></p>
 <ul>
 <li><code>tofu console</code> to try an expression before putting it in a file <span class="citation" data-cites="OTF_Console">[60]</span>.</li>
 <li><code>tofu show</code> to read the state or a saved plan; <code>tofu show -json tfplan</code> for scripts <span class="citation" data-cites="OTF_Show">[61]</span>.</li>
 <li><code>tofu graph | dot -Tsvg &gt; graph.svg</code> to see the dependency graph when the order surprises you <span class="citation" data-cites="OTF_Graph">[62]</span>.</li>
-<li><code>tofu plan -refresh-only</code> to see drift (changes made outside the tool) without planning any fixes, and <code>tofu apply -refresh-only</code> to accept it into the state <span class="citation" data-cites="OTF_Plan OTF_Refresh">[37], [63]</span>.</li>
+<li><code>tofu plan -refresh-only</code> to see drift (changes made outside OpenTofu) without planning any fixes, and <code>tofu apply -refresh-only</code> to accept it into the state <span class="citation" data-cites="OTF_Plan OTF_Refresh">[37], [63]</span>.</li>
 <li><code>tofu apply -replace=ADDRESS</code> to force one resource to be recreated, instead of tainting or deleting things <span class="citation" data-cites="OTF_Plan">[37]</span>.</li>
 <li><code>TF_LOG=DEBUG tofu plan</code> when a provider does something inexplicable; it prints every API call <span class="citation" data-cites="OTF_Debugging">[64]</span>.</li>
 <li><code>tofu test</code> with <code>.tftest.hcl</code> files for modules that deserve tests <span class="citation" data-cites="OTF_Test">[65]</span>.</li>
@@ -3313,7 +3313,7 @@ Plan: 2 to add, 1 to change, 2 to destroy.</pre>
 </tr>
 <tr>
 <td style="text-align: left;"><code>Unsupported OpenTofu Core version</code></td>
-<td style="text-align: left;"><code>required_version</code> excludes the tool you are running; upgrade the tool or loosen the constraint <span class="citation" data-cites="OTF_Settings">[79]</span>.</td>
+<td style="text-align: left;"><code>required_version</code> excludes the version you are running; upgrade OpenTofu or loosen the constraint <span class="citation" data-cites="OTF_Settings">[79]</span>.</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>Error acquiring the state lock</code></td>
@@ -3438,7 +3438,7 @@ Plan: 2 to add, 1 to change, 2 to destroy.</pre>
 </tr>
 <tr>
 <td style="text-align: left;"><code>Conflict. The container name "/motd-db" is already in use</code></td>
-<td style="text-align: left;">A container the tool does not know about; remove it or import it <span class="citation" data-cites="DockerRun OTF_ImportCli">[87], [89]</span>.</td>
+<td style="text-align: left;">A container OpenTofu does not know about; remove it or import it <span class="citation" data-cites="DockerRun OTF_ImportCli">[87], [89]</span>.</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>Cannot connect to the Docker daemon</code></td>
@@ -3483,7 +3483,7 @@ Plan: 2 to add, 1 to change, 2 to destroy.</pre>
 </tbody>
 </table>
 <h1 id="built-ins">Built-ins</h1>
-<p>Everything in this booklet came from one of two places: a provider, or the tool itself. This appendix lists what the tool itself provides, with no provider and no download: one resource type and one data source, the block types, the meta-arguments every resource accepts, the named values you can refer to, the operators, and the built-in functions. The function list is the commonly used subset; the full list is longer and lives in the documentation <span class="citation" data-cites="OTF_Functions">[106]</span>. Every example below was evaluated with <code>tofu console</code>, and the results are shown as plain values; the console itself wraps typed collections as <code>tolist([...])</code>, <code>toset([...])</code>, or <code>tomap({...})</code>.</p>
+<p>Everything in this booklet came from one of two places: a provider, or OpenTofu itself. This appendix lists what OpenTofu itself provides, with no provider and no download: one resource type and one data source, the block types, the meta-arguments every resource accepts, the named values you can refer to, the operators, and the built-in functions. The function list is the commonly used subset; the full list is longer and lives in the documentation <span class="citation" data-cites="OTF_Functions">[106]</span>. Every example below was evaluated with <code>tofu console</code>, and the results are shown as plain values; the console itself wraps typed collections as <code>tolist([...])</code>, <code>toset([...])</code>, or <code>tomap({...})</code>.</p>
 <h2 id="the-built-in-provider">The built-in provider</h2>
 <p> </p>
 <p>The built-in provider needs no <code>required_providers</code> entry and defines two things <span class="citation" data-cites="OTF_BuiltinProvider">[107]</span>:</p>
@@ -3532,7 +3532,7 @@ Plan: 2 to add, 1 to change, 2 to destroy.</pre>
 <tbody>
 <tr>
 <td style="text-align: left;"><code>terraform { }</code></td>
-<td style="text-align: left;">Settings for the tool: <code>required_version</code>, <code>required_providers</code>, <code>backend</code> <span class="citation" data-cites="OTF_Settings">[79]</span></td>
+<td style="text-align: left;">Settings for OpenTofu: <code>required_version</code>, <code>required_providers</code>, <code>backend</code> <span class="citation" data-cites="OTF_Settings">[79]</span></td>
 <td style="text-align: left;">1, 2</td>
 </tr>
 <tr>
@@ -3609,7 +3609,7 @@ Plan: 2 to add, 1 to change, 2 to destroy.</pre>
 </table>
 <h2 id="meta-arguments">Meta-arguments</h2>
 <p></p>
-<p>Arguments the tool understands on every <code>resource</code>, <code>data</code>, and (where noted) <code>module</code> block, regardless of provider:</p>
+<p>Arguments OpenTofu understands on every <code>resource</code>, <code>data</code>, and (where noted) <code>module</code> block, regardless of provider:</p>
 <table>
 <colgroup>
 <col style="width: 41%" />

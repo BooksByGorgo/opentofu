@@ -13,7 +13,7 @@ nav_order: 100
 <p></p>
 <ul>
 <li><strong>One directory per root module, one state per root module.</strong> A root module is a unit of <code>apply</code>. Things with different lifecycles (a cluster and what runs on it, infrastructure and application) go in different root modules, as Chapters 4 and 5 do <span class="citation" data-cites="OTF_ModuleComposition TerraformStyle">[3], [4]</span>.</li>
-<li><strong>Use the conventional file names.</strong> <code>versions.tf</code> (the <code>terraform</code> block), <code>providers.tf</code>, <code>variables.tf</code>, <code>outputs.tf</code>, <code>main.tf</code>, and more files named for what they hold (<code>network.tf</code>, <code>dns.tf</code>). The tool does not care; the next reader does <span class="citation" data-cites="OTF_ModuleStructure TerraformStyle">[4], [5]</span>.</li>
+<li><strong>Use the conventional file names.</strong> <code>versions.tf</code> (the <code>terraform</code> block), <code>providers.tf</code>, <code>variables.tf</code>, <code>outputs.tf</code>, <code>main.tf</code>, and more files named for what they hold (<code>network.tf</code>, <code>dns.tf</code>). OpenTofu does not care; the next reader does <span class="citation" data-cites="OTF_ModuleStructure TerraformStyle">[4], [5]</span>.</li>
 <li><strong>Name resources for their role, not their type:</strong> <code>web</code>, not <code>web_container</code>. The type is already in the address. Use underscores in names, never dashes, and keep names short: they appear in every plan <span class="citation" data-cites="TerraformStyle OTF_Style">[4], [6]</span>.</li>
 <li><strong>Keep modules small and single purpose,</strong> with every variable described and every output named for what it is. A module is a function; write it like one <span class="citation" data-cites="OTF_ModuleStructure">[5]</span>.</li>
 <li><strong>Do not abstract too early.</strong> Three similar resources are fine. The third copy of a whole configuration is the moment to write a module <span class="citation" data-cites="OTF_ModuleDev">[7]</span>.</li>
@@ -58,7 +58,7 @@ nav_order: 100
 <h3 id="changing-infrastructure">Changing infrastructure</h3>
 <p></p>
 <ul>
-<li><strong>Prefer immutable artifacts.</strong> An image tagged with its content hash (Chapter 4) is a change the tool can see; <code>latest</code> is not <span class="citation" data-cites="K8sImages K8sConfigBest">[34], [35]</span>.</li>
+<li><strong>Prefer immutable artifacts.</strong> An image tagged with its content hash (Chapter 4) is a change OpenTofu can see; <code>latest</code> is not <span class="citation" data-cites="K8sImages K8sConfigBest">[34], [35]</span>.</li>
 <li><strong>Provisioners are a last resort.</strong> They run only at creation, their failures leave resources tainted, and their commands are invisible to the plan. Prefer a provider, cloud-init, or a proper configuration management tool, and use <code>terraform_data</code> with <code>local-exec</code> for the small glue that has no better home <span class="citation" data-cites="OTF_Provisioners TF_TerraformData">[36], [37]</span>.</li>
 <li><strong>Make replacement chains explicit</strong> with <code>replace_triggered_by</code> when the provider cannot see the dependency (a seed file and the volume it loads into) <span class="citation" data-cites="OTF_Lifecycle">[29]</span>.</li>
 <li><strong>Add <code>precondition</code> and <code>postcondition</code> blocks</strong> for assumptions that would otherwise fail late, and <code>check</code> blocks for “did it work” <span class="citation" data-cites="OTF_CustomConditions OTF_Checks">[38], [39]</span>.</li>
@@ -69,19 +69,19 @@ nav_order: 100
 <p></p>
 <ul>
 <li><code>tofu fmt -recursive</code> and <code>tofu validate</code> in a pre-commit hook <span class="citation" data-cites="OTF_Fmt OTF_Validate PreCommit">[40], [41], [42]</span>.</li>
-<li><strong>tflint</strong> for lint rules the tool does not enforce (unused variables, deprecated arguments, provider-specific checks) <span class="citation" data-cites="TFLint">[43]</span>.</li>
+<li><strong>tflint</strong> for lint rules OpenTofu does not enforce (unused variables, deprecated arguments, provider-specific checks) <span class="citation" data-cites="TFLint">[43]</span>.</li>
 <li><strong>trivy</strong> or <strong>checkov</strong> for security scanning of configurations (open security groups, unencrypted storage) <span class="citation" data-cites="Trivy Checkov">[44], [45]</span>.</li>
 <li><strong>terraform-docs</strong> to generate the variables and outputs tables of a module’s README from its files <span class="citation" data-cites="TerraformDocsTool">[46]</span>.</li>
 <li><strong>tenv</strong> (or a similar version manager) to install and switch between OpenTofu and Terraform versions per project <span class="citation" data-cites="Tenv">[47]</span>.</li>
 <li>An editor with the language server, which gives completion for every provider’s arguments <span class="citation" data-cites="OTF_LS">[48]</span>.</li>
 </ul>
-<h3 id="working-with-the-tool">Working with the tool</h3>
+<h3 id="working-with-opentofu">Working with OpenTofu</h3>
 <p></p>
 <ul>
 <li><code>tofu console</code> to try an expression before putting it in a file <span class="citation" data-cites="OTF_Console">[49]</span>.</li>
 <li><code>tofu show</code> to read the state or a saved plan; <code>tofu show -json tfplan</code> for scripts <span class="citation" data-cites="OTF_Show">[50]</span>.</li>
 <li><code>tofu graph | dot -Tsvg &gt; graph.svg</code> to see the dependency graph when the order surprises you <span class="citation" data-cites="OTF_Graph">[51]</span>.</li>
-<li><code>tofu plan -refresh-only</code> to see drift (changes made outside the tool) without planning any fixes, and <code>tofu apply -refresh-only</code> to accept it into the state <span class="citation" data-cites="OTF_Plan OTF_Refresh">[24], [52]</span>.</li>
+<li><code>tofu plan -refresh-only</code> to see drift (changes made outside OpenTofu) without planning any fixes, and <code>tofu apply -refresh-only</code> to accept it into the state <span class="citation" data-cites="OTF_Plan OTF_Refresh">[24], [52]</span>.</li>
 <li><code>tofu apply -replace=ADDRESS</code> to force one resource to be recreated, instead of tainting or deleting things <span class="citation" data-cites="OTF_Plan">[24]</span>.</li>
 <li><code>TF_LOG=DEBUG tofu plan</code> when a provider does something inexplicable; it prints every API call <span class="citation" data-cites="OTF_Debugging">[53]</span>.</li>
 <li><code>tofu test</code> with <code>.tftest.hcl</code> files for modules that deserve tests <span class="citation" data-cites="OTF_Test">[54]</span>.</li>
@@ -163,7 +163,7 @@ nav_order: 100
 </tr>
 <tr>
 <td style="text-align: left;"><code>Unsupported OpenTofu Core version</code></td>
-<td style="text-align: left;"><code>required_version</code> excludes the tool you are running; upgrade the tool or loosen the constraint <span class="citation" data-cites="OTF_Settings">[68]</span>.</td>
+<td style="text-align: left;"><code>required_version</code> excludes the version you are running; upgrade OpenTofu or loosen the constraint <span class="citation" data-cites="OTF_Settings">[68]</span>.</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>Error acquiring the state lock</code></td>
@@ -288,7 +288,7 @@ nav_order: 100
 </tr>
 <tr>
 <td style="text-align: left;"><code>Conflict. The container name "/motd-db" is already in use</code></td>
-<td style="text-align: left;">A container the tool does not know about; remove it or import it <span class="citation" data-cites="DockerRun OTF_ImportCli">[76], [78]</span>.</td>
+<td style="text-align: left;">A container OpenTofu does not know about; remove it or import it <span class="citation" data-cites="DockerRun OTF_ImportCli">[76], [78]</span>.</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>Cannot connect to the Docker daemon</code></td>

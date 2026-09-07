@@ -1,7 +1,7 @@
 # Built-ins
 
-Everything in this booklet came from one of two places: a provider, or the tool itself.
-This appendix lists what the tool itself provides, with no provider and no download: one resource type and one data source, the block types, the meta-arguments every resource accepts, the named values you can refer to, the operators, and the built-in functions.
+Everything in this booklet came from one of two places: a provider, or OpenTofu itself.
+This appendix lists what OpenTofu itself provides, with no provider and no download: one resource type and one data source, the block types, the meta-arguments every resource accepts, the named values you can refer to, the operators, and the built-in functions.
 The function list is the commonly used subset; the full list is longer and lives in the documentation [@OTF_Functions].
 Every example below was evaluated with `tofu console`, and the results are shown as plain values; the console itself wraps typed collections as `tolist([...])`, `toset([...])`, or `tomap({...})`.
 
@@ -26,7 +26,7 @@ The top-level blocks a configuration is made of, and the nested blocks that only
 
 | Block | Purpose | Chapter |
 |:--------------------|:-----------------------------|:----|
-| `terraform { }` | Settings for the tool: `required_version`, `required_providers`, `backend` [@OTF_Settings] | 1, 2 |
+| `terraform { }` | Settings for OpenTofu: `required_version`, `required_providers`, `backend` [@OTF_Settings] | 1, 2 |
 | `provider "NAME" { }` | Configure a provider [@OTF_ProviderConfiguration] | 2 |
 | `resource "TYPE" "NAME" { }` | A thing that should exist [@OTF_ResourceSyntax] | 1 |
 | `data "TYPE" "NAME" { }` | A read-only lookup [@OTF_DataSources] | 2 |
@@ -46,7 +46,7 @@ The top-level blocks a configuration is made of, and the nested blocks that only
 
 \index{meta-arguments}
 
-Arguments the tool understands on every `resource`, `data`, and (where noted) `module` block, regardless of provider:
+Arguments OpenTofu understands on every `resource`, `data`, and (where noted) `module` block, regardless of provider:
 
 | Meta-argument | Meaning |
 |:--------------------|:-----------------------------|
