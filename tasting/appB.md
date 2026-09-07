@@ -221,7 +221,7 @@ What an expression can refer to [@OTF_References]:
 | `sha1("hello")` | `"aaf4c61d..."` |
 | `sha256("hello")` | `"2cf24dba..."` |
 | `md5("hello")` | `"5d41402a..."` |
-| `uuid()` | A new random UUID on every evaluation |
+| `uuid()` | A new random universally unique identifier (UUID) on every evaluation |
 
 ### Dates
 

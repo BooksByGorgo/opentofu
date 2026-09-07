@@ -25,10 +25,10 @@ nav_order: 0
 <li><strong>Docker</strong> running on your machine (Chapters 2 through 5): Docker Engine on Linux, Docker Desktop on macOS and Windows.</li>
 <li><strong>Go</strong> 1.21 or newer (Chapters 2 and 3, for running the server outside a container): the installers at <a href="https://go.dev/dl/">go.dev/dl</a> cover all three systems, or <code>brew install go</code> on macOS and <code>winget install GoLang.Go</code> on Windows. The examples declare Go 1.26 in <code>go.mod</code>, and any Go from 1.21 on fetches that toolchain for you the first time it is needed.</li>
 <li><strong>kind</strong> and <strong>kubectl</strong> (Chapter 4). On macOS, <code>brew install kind kubectl</code>. On Windows, <code>winget install Kubernetes.kind</code> and then <code>winget install Kubernetes.kubectl</code>. On Linux, the release binaries from the two projects’ sites.</li>
-<li>For Chapter 5, an <strong>Oracle Cloud</strong> free tier account, a domain whose DNS is hosted by <strong>Cloudflare</strong> (free is fine), and an email address for <strong>Let’s Encrypt</strong>.</li>
+<li>For Chapter 5, an <strong>Oracle Cloud</strong> free tier account, a domain whose Domain Name System (DNS) records are hosted by <strong>Cloudflare</strong> (free is fine), and an email address for <strong>Let’s Encrypt</strong>.</li>
 </ul>
 <h2 data-number="0.4" id="windows"><span class="header-section-number">0.4</span> Windows</h2>
-<p>The sessions in this booklet use a POSIX shell, which is what macOS and Linux give you. On Windows you have two good options.</p>
+<p>The sessions in this booklet use a POSIX (Portable Operating System Interface) shell, which is what macOS and Linux give you. On Windows you have two good options.</p>
 <p>The simplest is <strong>WSL</strong> (Windows Subsystem for Linux): install Ubuntu from the Microsoft Store, install Docker Desktop with its WSL integration turned on, and then follow the Linux instructions inside the Ubuntu terminal. Everything in the booklet works there exactly as printed.</p>
 <p>The other is to stay in <strong>PowerShell</strong> with the native Windows tools, which works too, with a few translations:</p>
 <table>

@@ -737,10 +737,10 @@
 <li><strong>Docker</strong> running on your machine (Chapters 2 through 5): Docker Engine on Linux, Docker Desktop on macOS and Windows.</li>
 <li><strong>Go</strong> 1.21 or newer (Chapters 2 and 3, for running the server outside a container): the installers at <a href="https://go.dev/dl/">go.dev/dl</a> cover all three systems, or <code>brew install go</code> on macOS and <code>winget install GoLang.Go</code> on Windows. The examples declare Go 1.26 in <code>go.mod</code>, and any Go from 1.21 on fetches that toolchain for you the first time it is needed.</li>
 <li><strong>kind</strong> and <strong>kubectl</strong> (Chapter 4). On macOS, <code>brew install kind kubectl</code>. On Windows, <code>winget install Kubernetes.kind</code> and then <code>winget install Kubernetes.kubectl</code>. On Linux, the release binaries from the two projects’ sites.</li>
-<li>For Chapter 5, an <strong>Oracle Cloud</strong> free tier account, a domain whose DNS is hosted by <strong>Cloudflare</strong> (free is fine), and an email address for <strong>Let’s Encrypt</strong>.</li>
+<li>For Chapter 5, an <strong>Oracle Cloud</strong> free tier account, a domain whose Domain Name System (DNS) records are hosted by <strong>Cloudflare</strong> (free is fine), and an email address for <strong>Let’s Encrypt</strong>.</li>
 </ul>
 <h2 id="windows">Windows</h2>
-<p>The sessions in this booklet use a POSIX shell, which is what macOS and Linux give you. On Windows you have two good options.</p>
+<p>The sessions in this booklet use a POSIX (Portable Operating System Interface) shell, which is what macOS and Linux give you. On Windows you have two good options.</p>
 <p>The simplest is <strong>WSL</strong> (Windows Subsystem for Linux): install Ubuntu from the Microsoft Store, install Docker Desktop with its WSL integration turned on, and then follow the Linux instructions inside the Ubuntu terminal. Everything in the booklet works there exactly as printed.</p>
 <p>The other is to stay in <strong>PowerShell</strong> with the native Windows tools, which works too, with a few translations:</p>
 <table>
@@ -884,7 +884,7 @@ main.tf  terraform.tfstate</pre>
 <p>You can ask what the state contains:</p>
 <pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ tofu state list</b>
 terraform_data.hello</pre>
-<p>State is a JSON file, so you will be tempted to read it. Reading is fine. Editing it by hand is how you end up with a tool that thinks a server exists when it does not, or misses one that does. Use <code>tofu state</code> subcommands when you need to change it (Appendix A lists them).</p>
+<p>State is a JSON (JavaScript Object Notation) file, so you will be tempted to read it. Reading is fine. Editing it by hand is how you end up with a tool that thinks a server exists when it does not, or misses one that does. Use <code>tofu state</code> subcommands when you need to change it (Appendix A lists them).</p>
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
 <span class="callout-icon callout-trap" role="img" aria-label="trap"></span>
 <div style="flex: 1; min-width: 0;">
@@ -944,7 +944,7 @@ hello world</pre>
 <div class="sourceCode" id="cb6"><pre class="sourceCode json"><code class="sourceCode json"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
 <span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;greeting&quot;</span><span class="fu">:</span> <span class="st">&quot;hola mundo&quot;</span></span>
 <span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div>
-<p>The environment form is how you pass values from scripts and CI without putting them on a command line where <code>ps</code> can see them.</p>
+<p>The environment form is how you pass values from scripts and continuous integration (CI) without putting them on a command line where <code>ps</code> can see them.</p>
 <p> Nothing stops you from using several of these at once, so OpenTofu reads every source it can find and lets the later ones overwrite the earlier ones. From weakest to strongest:</p>
 <ol type="1">
 <li>the <code>default</code> in the <code>variable</code> block</li>
@@ -1028,7 +1028,7 @@ Apply complete! Resources: 0 added, 0 changed, 0 destroyed.</pre>
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
 <span class="callout-icon callout-tip" role="img" aria-label="tip"></span>
 <div style="flex: 1; min-width: 0;">
-<p><strong>Tip:</strong> Provisioners are OpenTofu’s escape hatch, and Appendix A explains why they are a last resort in real projects. Chapter 2 replaces <code>echo</code> with resources that talk to real APIs. Even so, <code>terraform_data</code> plus <code>local-exec</code> is a fine way to glue in a command that has no provider, as Chapter 4 does with <code>kind load</code>.</p>
+<p><strong>Tip:</strong> Provisioners are OpenTofu’s escape hatch, and Appendix A explains why they are a last resort in real projects. Chapter 2 replaces <code>echo</code> with resources that talk to real application programming interfaces (APIs). Even so, <code>terraform_data</code> plus <code>local-exec</code> is a fine way to glue in a command that has no provider, as Chapter 4 does with <code>kind load</code>.</p>
 </div></div>
 <h2 id="key-points">Key Points</h2>
 <ul>
@@ -1142,7 +1142,7 @@ Apply complete! Resources: 0 added, 0 changed, 0 destroyed.</pre>
 <p><strong>The need.</strong> A configuration that only runs <code>echo</code> is talking to itself. Real things live behind APIs: a container runtime, a cloud, a DNS service. OpenTofu cannot know every API, so it needs a way to load the vocabulary for each one, to pin which version of that vocabulary everyone uses, and to authenticate without putting credentials in the files. Several resources depend on one another, values have to be computed from other values, and something has to test that the result actually works.</p>
 <p><strong>Why it matters.</strong> Providers are how one language reaches every cloud and service, and version pinning is what makes a configuration produce the same result on a colleague’s machine next year. Dependencies derived from references replace the carefully ordered steps of a script. A check that runs after every apply is the difference between “it applied” and “it works”.</p>
 <p><strong>Why it is hard.</strong> Every provider has its own authentication and its own release cadence, and a new major version can rename arguments. The order of operations is nowhere written down; it has to be inferred from what refers to what. A change in an input, like an edited source file, has to turn into a rebuild without anyone tracking it by hand.</p>
-<p><strong>The strategy.</strong> Load providers through <code>required_providers</code> with constrained versions and a lock file, keep credentials in the environment, and let references between resources build the dependency graph. Compute derived values with locals and functions, and finish with a <code>check</code> block that tests the result. The example that exercises all of it is a small Go web server: the Docker provider builds its image and runs the container, and the HTTP provider verifies that it answers.</p>
+<p><strong>The strategy.</strong> Load providers through <code>required_providers</code> with constrained versions and a lock file, keep credentials in the environment, and let references between resources build the dependency graph. Compute derived values with locals and functions, and finish with a <code>check</code> block that tests the result. The example that exercises all of it is a small Go web server: the Docker provider builds its image and runs the container, and the HTTP (Hypertext Transfer Protocol) provider verifies that it answers.</p>
 <h2 id="the-program">The program</h2>
 <p> This example uses the simplest web server. Create the directory <code>webserver</code> for this chapter’s configuration, and put this program in <code>webserver/app/main.go</code>:</p>
 <div class="sourceCode" id="cb9"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
@@ -1302,7 +1302,7 @@ Hello, World!</pre>
 <span id="cb16-14"><a href="#cb16-14" aria-hidden="true" tabindex="-1"></a>  }</span>
 <span id="cb16-15"><a href="#cb16-15" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
 <p>A <code>check</code> block is a unit test for infrastructure. It runs on every plan and apply, after everything else, and reports whether an assertion holds.</p>
-<p> Inside it is a <code>data</code> block, the first one in the booklet. A <strong>data source</strong> is a read-only lookup: where a resource creates something, a data source fetches something that already exists. <code>data "http"</code> fetches a URL and exposes the <code>status_code</code> and <code>response_body</code>. Data sources are referenced with a <code>data.</code> prefix, so the body is <code>data.http.web.response_body</code>.</p>
+<p> Inside it is a <code>data</code> block, the first one in the booklet. A <strong>data source</strong> is a read-only lookup: where a resource creates something, a data source fetches something that already exists. <code>data "http"</code> fetches a URL (uniform resource locator) and exposes the <code>status_code</code> and <code>response_body</code>. Data sources are referenced with a <code>data.</code> prefix, so the body is <code>data.http.web.response_body</code>.</p>
 <p>The URL references the container’s published port, and that reference is why the check waits for the container to exist. <code>retry</code> keeps trying for a few seconds because a container does not answer the instant it starts. The <code>assert</code> block then compares the body with what you expect.</p>
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
 <span class="callout-icon callout-wut" role="img" aria-label="wut"></span>
@@ -1621,7 +1621,7 @@ Destroy complete! Resources: 2 destroyed.</pre>
 <span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">source</span> <span class="op">=</span> <span class="st">&quot;github.com/BooksByGorgo/opentofu//tasting/examples/motd?ref=main&quot;</span></span>
 <span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
 <p>A <strong>module</strong> is a directory of configuration with inputs and outputs. The directory you run <code>tofu</code> in is the <strong>root module</strong>; any directory it pulls in with a <code>module</code> block is a <strong>child module</strong>. A module is a function: its variables are the parameters, its resources are the body, and its outputs are the return values. Calling one means writing a <code>module</code> block, and the call’s result is the child’s outputs, available as <code>module.NAME.OUTPUT</code>.</p>
-<p>The <code>source</code> says where the directory comes from <span class="citation" data-cites="OTF_ModuleSources">[7]</span>: a GitHub repository, <code>//</code> followed by the path inside it, and <code>?ref=</code> naming the branch, tag, or commit to take. Local paths and the module registry are the other kinds of source, and Chapter 4 uses the first of them. <code>tofu init</code> clones the repository over HTTPS, which for a public repository needs no token and no account, and puts the directory under <code>.terraform/modules</code>:</p>
+<p>The <code>source</code> says where the directory comes from <span class="citation" data-cites="OTF_ModuleSources">[7]</span>: a GitHub repository, <code>//</code> followed by the path inside it, and <code>?ref=</code> naming the branch, tag, or commit to take. Local paths and the module registry are the other kinds of source, and Chapter 4 uses the first of them. <code>tofu init</code> clones the repository over HTTPS (HTTP Secure), which for a public repository needs no token and no account, and puts the directory under <code>.terraform/modules</code>:</p>
 <pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ tofu init</b>
 Initializing modules...
 Downloading git::https://github.com/BooksByGorgo/opentofu.git?ref=main for sayings...
@@ -1827,7 +1827,7 @@ INSERT INTO sayings (id, saying) VALUES
 <p>The <code>docker_image</code> without a <code>build</code> block pulls the image from Docker Hub. The environment variables are the MySQL image’s own interface: it creates the database and the user on first start, and it generates a root password you never need.</p>
 <p>The <code>networks_advanced</code> block joins the network and gives the container the alias <code>db</code>, so that the web server can use <code>db</code> as a host name without caring what the container is called.</p>
 <p>Two <code>volumes</code> blocks mount two things: the named volume for the data, and the directory holding the seed file, which goes where the MySQL image looks for initialization scripts. Docker needs an absolute path for a bind mount, so <code>dirname</code> takes the seed file’s directory and <code>abspath</code> makes it absolute. Referencing <code>local_file.seed.filename</code> also makes sure the file is written before the container starts.</p>
-<p> The <code>healthcheck</code> block defines what “healthy” means, and <code>wait = true</code> makes the provider hold the resource in “Creating” until the health check passes. Pinging <code>127.0.0.1</code> rather than <code>localhost</code> matters: while MySQL is loading seed scripts it runs a temporary server that only listens on a Unix socket, and pinging over TCP fails until the real server is up. So when this resource is “created”, the sayings are loaded and the database is accepting connections.</p>
+<p> The <code>healthcheck</code> block defines what “healthy” means, and <code>wait = true</code> makes the provider hold the resource in “Creating” until the health check passes. Pinging <code>127.0.0.1</code> rather than <code>localhost</code> matters: while MySQL is loading seed scripts it runs a temporary server that only listens on a Unix socket, and pinging over TCP (Transmission Control Protocol) fails until the real server is up. So when this resource is “created”, the sayings are loaded and the database is accepting connections.</p>
 <p>The final <code>replace_triggered_by</code> completes the chain: seed file replaced, so volume replaced, so container replaced.</p>
 <h2 id="the-web-server">The web server</h2>
 <p>The Go program grows a database lookup. Copy <code>app</code> from <code>webserver</code> into <code>database</code>; the changed <code>app/main.go</code>:</p>
@@ -1876,7 +1876,7 @@ INSERT INTO sayings (id, saying) VALUES
 <span id="cb31-43"><a href="#cb31-43" aria-hidden="true" tabindex="-1"></a>    log<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;listening on %s&quot;</span><span class="op">,</span> addr<span class="op">)</span></span>
 <span id="cb31-44"><a href="#cb31-44" aria-hidden="true" tabindex="-1"></a>    log<span class="op">.</span>Fatal<span class="op">(</span>http<span class="op">.</span>ListenAndServe<span class="op">(</span>addr<span class="op">,</span> <span class="ot">nil</span><span class="op">))</span></span>
 <span id="cb31-45"><a href="#cb31-45" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
-<p>Two details are there because of the container. <code>sql.Open</code> does not connect until the first query, so the server starts even if the database is not ready, and answers 503 until it is. And <code>time/tzdata</code> embeds the time zone database, because the <code>scratch</code> image has no <code>/usr/share/zoneinfo</code>, and without it <code>TZ=America/Los_Angeles</code> silently means UTC.</p>
+<p>Two details are there because of the container. <code>sql.Open</code> does not connect until the first query, so the server starts even if the database is not ready, and answers 503 until it is. And <code>time/tzdata</code> embeds the time zone database, because the <code>scratch</code> image has no <code>/usr/share/zoneinfo</code>, and without it <code>TZ=America/Los_Angeles</code> silently means Coordinated Universal Time (UTC).</p>
 <p>Add the driver with <code>go get github.com/go-sql-driver/mysql</code>, which updates <code>go.mod</code> and creates <code>go.sum</code>. Then change the Dockerfile’s <code>COPY go.mod ./</code> to <code>COPY go.mod go.sum ./</code>.</p>
 <p>The container, in <code>web.tf</code>, reuses the image build from Chapter 2 (now tagged <code>motd:ch3</code>) and adds an environment and a network:</p>
 <div class="sourceCode" id="cb32"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;docker_container&quot;</span> <span class="st">&quot;web&quot;</span> {</span>
@@ -1899,7 +1899,7 @@ INSERT INTO sayings (id, saying) VALUES
 <span id="cb32-18"><a href="#cb32-18" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb32-19"><a href="#cb32-19" aria-hidden="true" tabindex="-1"></a>  <span class="at">depends_on</span> <span class="op">=</span> [docker_container.db]</span>
 <span id="cb32-20"><a href="#cb32-20" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
-<p>The DSN names the host <code>db</code>, which is the alias on the shared network, and pastes in the generated password. <code>timezone</code> is a new variable with the default <code>America/Los_Angeles</code>; set it to yours.</p>
+<p>The DSN (data source name) names the host <code>db</code>, which is the alias on the shared network, and pastes in the generated password. <code>timezone</code> is a new variable with the default <code>America/Los_Angeles</code>; set it to yours.</p>
 <p> <code>depends_on</code> is an <strong>explicit dependency</strong>. Nothing in this block references the database container, so OpenTofu would happily start the web server first. <code>depends_on</code> says: wait for that one anyway. Use it only when there is no attribute you can reference, because a reference is both a dependency and documentation of why.</p>
 <p>The check follows the same pattern as Chapter 2 with a stricter assertion:</p>
 <div class="sourceCode" id="cb33"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a>  assert {</span>
@@ -2624,7 +2624,7 @@ Plan: 2 to add, 1 to change, 2 to destroy.</pre>
 <p><strong>The need.</strong> When a system spans several vendors and several lifecycles, one configuration is no longer the correct unit. Infrastructure that changes rarely and an application that changes daily should be applied separately, with a way to pass values from one to the other. Values that should not be hard-coded, like the newest machine image, have to be looked up. Repeated resources need to be generated from a set rather than written out, and a configuration that reaches across a machine boundary has to be clear about where paths, commands, and secrets end up.</p>
 <p><strong>Why it matters.</strong> Separate root modules with remote state are how real projects limit the blast radius of a mistake and let people work in parallel. Data sources and <code>for_each</code> are what keep a configuration correct as images are retired and lists grow. Knowing where a provider acts, and what loses its sensitivity on the way, is the difference between a secret and a leak.</p>
 <p><strong>Why it is hard.</strong> A provider must be able to reach its target during plan, so anything the provider needs has to exist before the configuration that uses it, which forces the split. Cloud networks are many small resources that must agree, some of which already exist and have to be taken over rather than created. Credentials for three vendors have to stay out of the files, certificates expire, and destroying things in the wrong order strands a state.</p>
-<p><strong>The strategy.</strong> Two root modules: infra creates the machine, the DNS records, and the certificate; app reads infra’s outputs through <code>terraform_remote_state</code> and deploys the Chapter 3 configuration as a module over SSH. Data sources find the image, <code>for_each</code> and <code>dynamic</code> generate the records and the firewall rules, a heredoc holds the proxy configuration, and <code>sensitive()</code> protects what crosses between states. The example is the sayings server on an Oracle Cloud free tier machine, named through Cloudflare DNS and served over HTTPS with a Let’s Encrypt certificate.</p>
+<p><strong>The strategy.</strong> Two root modules: infra creates the machine, the DNS records, and the certificate; app reads infra’s outputs through <code>terraform_remote_state</code> and deploys the Chapter 3 configuration as a module over Secure Shell (SSH). Data sources find the image, <code>for_each</code> and <code>dynamic</code> generate the records and the firewall rules, a heredoc holds the proxy configuration, and <code>sensitive()</code> protects what crosses between states. The example is the sayings server on an Oracle Cloud free tier machine, named through Cloudflare DNS and served over HTTPS with a Let’s Encrypt certificate.</p>
 <h2 id="the-providers">The providers</h2>
 <p> This chapter’s two configurations live in <code>oracle/infra</code> and <code>oracle/app</code>, next to <code>modules</code>. Stage one, in <code>infra</code>, uses four providers, all new; stage two, in <code>app</code>, reuses Docker, random, and HTTP from Chapter 3. <code>oracle/infra/versions.tf</code>:</p>
 <div class="sourceCode" id="cb50"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb50-1"><a href="#cb50-1" aria-hidden="true" tabindex="-1"></a><span class="kw">terraform</span> {</span>
@@ -2661,7 +2661,7 @@ Plan: 2 to add, 1 to change, 2 to destroy.</pre>
 <span id="cb50-32"><a href="#cb50-32" aria-hidden="true" tabindex="-1"></a><span class="kw">provider</span> <span class="st">&quot;acme&quot;</span> {</span>
 <span id="cb50-33"><a href="#cb50-33" aria-hidden="true" tabindex="-1"></a>  server_url <span class="op">=</span> <span class="va">var</span>.acme_server</span>
 <span id="cb50-34"><a href="#cb50-34" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
-<p>The <strong>OCI</strong> provider manages Oracle Cloud: networks, subnets, gateways, machines, and hundreds of other resource types, all prefixed <code>oci_</code>, plus data sources for looking things up, such as which machine images exist <span class="citation" data-cites="OCIProvider">[10]</span>. It authenticates with the same <code>~/.oci/config</code> file that Oracle’s own command line tool writes and reads. The <strong>Cloudflare</strong> provider manages DNS zones and records, among much else, through Cloudflare’s API and an API token <span class="citation" data-cites="CFProvider">[11]</span>. The <strong>ACME</strong> provider speaks the protocol Let’s Encrypt uses to issue certificates: <code>acme_registration</code> creates an account and <code>acme_certificate</code> requests a certificate, proving control of the name through a DNS record that the provider creates and removes for you <span class="citation" data-cites="ACMEProviderDocs">[12]</span>. The <strong>TLS</strong> provider generates keys and certificates locally, the way <code>random</code> generates strings; this chapter uses <code>tls_private_key</code> for the ACME account key <span class="citation" data-cites="TLSProviderDocs">[13]</span>.</p>
+<p>The <strong>OCI</strong> (Oracle Cloud Infrastructure) provider manages Oracle Cloud: networks, subnets, gateways, machines, and hundreds of other resource types, all prefixed <code>oci_</code>, plus data sources for looking things up, such as which machine images exist <span class="citation" data-cites="OCIProvider">[10]</span>. It authenticates with the same <code>~/.oci/config</code> file that Oracle’s own command line tool writes and reads. The <strong>Cloudflare</strong> provider manages DNS zones and records, among much else, through Cloudflare’s API and an API token <span class="citation" data-cites="CFProvider">[11]</span>. The <strong>ACME</strong> (Automatic Certificate Management Environment) provider speaks the protocol Let’s Encrypt uses to issue certificates: <code>acme_registration</code> creates an account and <code>acme_certificate</code> requests a certificate, proving control of the name through a DNS record that the provider creates and removes for you <span class="citation" data-cites="ACMEProviderDocs">[12]</span>. The <strong>TLS</strong> (Transport Layer Security) provider generates keys and certificates locally, the way <code>random</code> generates strings; this chapter uses <code>tls_private_key</code> for the ACME account key <span class="citation" data-cites="TLSProviderDocs">[13]</span>.</p>
 <h2 id="new-syntax-in-this-chapter">New syntax in this chapter</h2>
 <p> Five language features appear here for the first time or in a new role. Each is explained where it is used; this is the map.</p>
 <ul>
@@ -2673,7 +2673,7 @@ Plan: 2 to add, 1 to change, 2 to destroy.</pre>
 </ul>
 <h2 id="accounts-and-credentials">Accounts and credentials</h2>
 <p> Before any configuration, three things must be in place.</p>
-<p><strong>Oracle Cloud.</strong> Create a free tier account, install the <code>oci</code> command line tool, and run <code>oci setup config</code>. It writes <code>~/.oci/config</code> with your tenancy, user, region, and API key, and the provider reads that file. Find your tenancy OCID in the console under your profile; the tenancy is also the root compartment, and building in it is fine for a booklet.</p>
+<p><strong>Oracle Cloud.</strong> Create a free tier account, install the <code>oci</code> command line tool, and run <code>oci setup config</code>. It writes <code>~/.oci/config</code> with your tenancy, user, region, and API key, and the provider reads that file. Find your tenancy OCID (Oracle Cloud Identifier) in the console under your profile; the tenancy is also the root compartment, and building in it is fine for a booklet.</p>
 <p><strong>Cloudflare.</strong> Your domain’s DNS must be hosted by Cloudflare (the free plan is enough). Create an API token with the <code>Zone.DNS: Edit</code> permission for the zone, and copy the zone ID from the domain’s overview page. Two things read the token, so export it under both names:</p>
 <pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ export CLOUDFLARE_API_TOKEN=...       # the cloudflare provider</b>
 <b>$ export CLOUDFLARE_DNS_API_TOKEN=...   # the acme provider's dns challenge</b></pre>
@@ -3474,7 +3474,7 @@ Plan: 2 to add, 1 to change, 2 to destroy.</pre>
 </tr>
 <tr>
 <td style="text-align: left;"><code>NXDOMAIN</code> during the DNS challenge</td>
-<td style="text-align: left;">The TXT record has not propagated; the provider retries, and a low TTL on the zone helps <span class="citation" data-cites="ACMEProvider LEChallenges">[102], [103]</span>.</td>
+<td style="text-align: left;">The TXT record has not propagated; the provider retries, and a low TTL (time to live) on the zone helps <span class="citation" data-cites="ACMEProvider LEChallenges">[102], [103]</span>.</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>Permission denied (publickey)</code> over SSH</td>
@@ -4184,6 +4184,10 @@ Plan: 2 to add, 1 to change, 2 to destroy.</pre>
 </table>
 <h3 id="hashes-and-identifiers">Hashes and identifiers</h3>
 <table>
+<colgroup>
+<col style="width: 63%" />
+<col style="width: 36%" />
+</colgroup>
 <thead>
 <tr>
 <th style="text-align: left;">Example</th>
@@ -4205,7 +4209,7 @@ Plan: 2 to add, 1 to change, 2 to destroy.</pre>
 </tr>
 <tr>
 <td style="text-align: left;"><code>uuid()</code></td>
-<td style="text-align: left;">A new random UUID on every evaluation</td>
+<td style="text-align: left;">A new random universally unique identifier (UUID) on every evaluation</td>
 </tr>
 </tbody>
 </table>

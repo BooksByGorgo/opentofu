@@ -205,5 +205,5 @@ Messages are abbreviated.
 | `NotAuthorizedOrNotFound` (Oracle) | The compartment OCID is wrong, or the profile in `~/.oci/config` lacks permission, or the region differs from the resource's [@OCIErrors; @OCIProvider]. |
 | `Authentication error (10000)` (Cloudflare) | The token is missing, wrong, or lacks `Zone.DNS: Edit` on that zone [@CFToken; @CFProvider]. |
 | `urn:ietf:params:acme:error:rateLimited` | Too many certificates for the name; wait, and use the staging server while testing [@LERateLimits; @LEStaging; @LetsEncrypt]. |
-| `NXDOMAIN` during the DNS challenge | The TXT record has not propagated; the provider retries, and a low TTL on the zone helps [@ACMEProvider; @LEChallenges]. |
+| `NXDOMAIN` during the DNS challenge | The TXT record has not propagated; the provider retries, and a low TTL (time to live) on the zone helps [@ACMEProvider; @LEChallenges]. |
 | `Permission denied (publickey)` over SSH | The key in `ssh_public_key` is not the one your agent offers, or cloud-init has not finished creating the user [@OCIAccess; @CloudInit]. |

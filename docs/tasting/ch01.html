@@ -82,7 +82,7 @@ main.tf  terraform.tfstate</pre>
 <p>You can ask what the state contains:</p>
 <pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ tofu state list</b>
 terraform_data.hello</pre>
-<p>State is a JSON file, so you will be tempted to read it. Reading is fine. Editing it by hand is how you end up with a tool that thinks a server exists when it does not, or misses one that does. Use <code>tofu state</code> subcommands when you need to change it (Appendix A lists them).</p>
+<p>State is a JSON (JavaScript Object Notation) file, so you will be tempted to read it. Reading is fine. Editing it by hand is how you end up with a tool that thinks a server exists when it does not, or misses one that does. Use <code>tofu state</code> subcommands when you need to change it (Appendix A lists them).</p>
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
 <img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
 <div style="flex: 1; min-width: 0;">
@@ -142,7 +142,7 @@ hello world</pre>
 <div class="sourceCode" id="cb5"><pre class="sourceCode json"><code class="sourceCode json"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;greeting&quot;</span><span class="fu">:</span> <span class="st">&quot;hola mundo&quot;</span></span>
 <span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div>
-<p>The environment form is how you pass values from scripts and CI without putting them on a command line where <code>ps</code> can see them.</p>
+<p>The environment form is how you pass values from scripts and continuous integration (CI) without putting them on a command line where <code>ps</code> can see them.</p>
 <p>  Nothing stops you from using several of these at once, so OpenTofu reads every source it can find and lets the later ones overwrite the earlier ones. From weakest to strongest:</p>
 <ol type="1">
 <li>the <code>default</code> in the <code>variable</code> block</li>
@@ -226,7 +226,7 @@ Apply complete! Resources: 0 added, 0 changed, 0 destroyed.</pre>
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
 <img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
 <div style="flex: 1; min-width: 0;">
-<p><strong>Tip:</strong> Provisioners are OpenTofu’s escape hatch, and Appendix A explains why they are a last resort in real projects. Chapter 2 replaces <code>echo</code> with resources that talk to real APIs. Even so, <code>terraform_data</code> plus <code>local-exec</code> is a fine way to glue in a command that has no provider, as Chapter 4 does with <code>kind load</code>.</p>
+<p><strong>Tip:</strong> Provisioners are OpenTofu’s escape hatch, and Appendix A explains why they are a last resort in real projects. Chapter 2 replaces <code>echo</code> with resources that talk to real application programming interfaces (APIs). Even so, <code>terraform_data</code> plus <code>local-exec</code> is a fine way to glue in a command that has no provider, as Chapter 4 does with <code>kind load</code>.</p>
 </div></div>
 <h2 data-number="1.8" id="key-points"><span class="header-section-number">1.8</span> Key Points</h2>
 <ul>
