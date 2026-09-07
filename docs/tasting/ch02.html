@@ -12,7 +12,7 @@ nav_order: 2
 <p><strong>Why it is hard.</strong> Every provider has its own authentication and its own release cadence, and a new major version can rename arguments. The order of operations is nowhere written down; it has to be inferred from what refers to what. A change in an input, like an edited source file, has to turn into a rebuild without anyone tracking it by hand.</p>
 <p><strong>The strategy.</strong> Load providers through <code>required_providers</code> with constrained versions and a lock file, keep credentials in the environment, and let references between resources build the dependency graph. Compute derived values with locals and functions, and finish with a <code>check</code> block that tests the result. The example that exercises all of it is a small Go web server: the Docker provider builds its image and runs the container, and the HTTP provider verifies that it answers.</p>
 <h2 data-number="2.1" id="the-program"><span class="header-section-number">2.1</span> The program</h2>
-<p> The web The web server is as small as a web server gets. Create the directory <code>webserver</code> for this chapter’s configuration, and put the program in <code>webserver/app/main.go</code>:</p>
+<p> This example uses the simplest web server. Create the directory <code>webserver</code> for this chapter’s configuration, and put this program in <code>webserver/app/main.go</code>:</p>
 <div class="sourceCode" id="cb1"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
@@ -35,54 +35,54 @@ nav_order: 2
 <span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>    log<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;listening on %s&quot;</span><span class="op">,</span> addr<span class="op">)</span></span>
 <span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>    log<span class="op">.</span>Fatal<span class="op">(</span>http<span class="op">.</span>ListenAndServe<span class="op">(</span>addr<span class="op">,</span> <span class="ot">nil</span><span class="op">))</span></span>
 <span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
-<p>It needs a module file, <code>app/go.mod</code>:</p>
-<pre><code>module motd
-
-go 1.26</code></pre>
+<p>It needs a module file, <code>app/go.mod</code>, so in the <code>app</code> directory run:</p>
+<pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ go mod init motd</b>
+go: creating new go.mod: module motd
+<b>$ go mod edit -go=1.26</b></pre>
+<p><code>go mod init</code> records the version of Go you have installed; the second command pins the file to 1.26, the version the examples and the Dockerfile use.</p>
 <p>Check it works before involving any other tool:</p>
-<pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ cd webserver/app</b>
-<b>$ go run . &amp;</b>
+<pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ go run . &amp;</b>
 <b>$ curl localhost:8080/</b>
 Hello, World!</pre>
-<p> The container image is described by <code>app/Dockerfile</code>, in two stages: one with the Go toolchain to build a static binary, and one that ships nothing but the binary:</p>
-<div class="sourceCode" id="cb3"><pre class="sourceCode dockerfile"><code class="sourceCode dockerfile"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># stage 1: build a static binary</span></span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="kw">FROM</span> golang:1.26 <span class="kw">AS</span> build</span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="kw">WORKDIR</span> /src</span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="kw">COPY</span> go.mod ./</span>
-<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="kw">RUN</span> <span class="ex">go</span> mod download</span>
-<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="kw">COPY</span> . .</span>
-<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="kw">RUN</span> <span class="va">CGO_ENABLED</span><span class="op">=</span>0 <span class="ex">go</span> build <span class="at">-o</span> /motd .</span>
-<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a><span class="co"># stage 2: ship only the binary</span></span>
-<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a><span class="kw">FROM</span> scratch</span>
-<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a><span class="kw">COPY</span> <span class="op">--from=build</span> /motd /motd</span>
-<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a><span class="kw">EXPOSE</span> 8080</span>
-<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a><span class="kw">ENTRYPOINT</span> [<span class="st">&quot;/motd&quot;</span>]</span></code></pre></div>
-<p>The result is an eight megabyte image with one file in it. Also add <code>app/.dockerignore</code> containing <code>.git</code>, so that the repository history does not get copied into the build.</p>
-<p>Do not run <code>docker build</code> yourself. Writing the Dockerfile is the whole of your job here. The build belongs to a resource in the configuration: <code>tofu apply</code> builds the image, and rebuilds it whenever the source changes.</p>
+<p> The web server runs in a container, and <code>app/Dockerfile</code> describes its image. The image is built in two stages: one with the Go toolchain to build a static binary, and one that ships nothing but the binary:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode dockerfile"><code class="sourceCode dockerfile"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># stage 1: build a static binary</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="kw">FROM</span> golang:1.26 <span class="kw">AS</span> build</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="kw">WORKDIR</span> /src</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="kw">COPY</span> go.mod ./</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="kw">RUN</span> <span class="ex">go</span> mod download</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="kw">COPY</span> . .</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="kw">RUN</span> <span class="va">CGO_ENABLED</span><span class="op">=</span>0 <span class="ex">go</span> build <span class="at">-o</span> /motd .</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="co"># stage 2: ship only the binary</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a><span class="kw">FROM</span> scratch</span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a><span class="kw">COPY</span> <span class="op">--from=build</span> /motd /motd</span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a><span class="kw">EXPOSE</span> 8080</span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a><span class="kw">ENTRYPOINT</span> [<span class="st">&quot;/motd&quot;</span>]</span></code></pre></div>
+<p>The result is an eight megabyte image with one file in it.</p>
+<p><strong>Do not run <code>docker build</code> yourself.</strong> Writing the Dockerfile is all you need to do. <code>tofu apply</code> builds the image, and rebuilds it whenever the source changes.</p>
 <h2 data-number="2.2" id="providers"><span class="header-section-number">2.2</span> Providers</h2>
 <p>  The configuration files are in the <code>webserver</code> directory, which is the parent directory of <code>app</code>. This chapter splits the configuration across several files, which is the normal way to organize one. It starts with <code>versions.tf</code>:</p>
-<div class="sourceCode" id="cb4"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">terraform</span> {</span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">required_version</span> <span class="op">=</span> <span class="st">&quot;&gt;= 1.6&quot;</span></span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>  <span class="kw">required_providers</span> {</span>
-<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>    docker <span class="op">=</span> {</span>
-<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>      <span class="kw">source</span>  <span class="op">=</span> <span class="st">&quot;kreuzwerker/docker&quot;</span></span>
-<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>      version <span class="op">=</span> <span class="st">&quot;~&gt; 3.0&quot;</span></span>
-<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>    }</span>
-<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>    http <span class="op">=</span> {</span>
-<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>      <span class="kw">source</span>  <span class="op">=</span> <span class="st">&quot;hashicorp/http&quot;</span></span>
-<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>      version <span class="op">=</span> <span class="st">&quot;~&gt; 3.4&quot;</span></span>
-<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>    }</span>
-<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>  }</span>
-<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<div class="sourceCode" id="cb3"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">terraform</span> {</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">required_version</span> <span class="op">=</span> <span class="st">&quot;&gt;= 1.6&quot;</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>  <span class="kw">required_providers</span> {</span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    docker <span class="op">=</span> {</span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>      <span class="kw">source</span>  <span class="op">=</span> <span class="st">&quot;kreuzwerker/docker&quot;</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>      version <span class="op">=</span> <span class="st">&quot;~&gt; 3.0&quot;</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>    http <span class="op">=</span> {</span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>      <span class="kw">source</span>  <span class="op">=</span> <span class="st">&quot;hashicorp/http&quot;</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>      version <span class="op">=</span> <span class="st">&quot;~&gt; 3.4&quot;</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
 <p> <code>required_providers</code> lists every provider the configuration uses. Each entry has a <strong>source</strong>, which is an address in the provider registry written as <code>namespace/name</code>, and a <strong>version</strong> constraint. The local name on the left (<code>docker</code>) is what the rest of the configuration uses, and by convention it matches the name in the source.</p>
 <p>  The <code>~&gt;</code> operator is the <strong>pessimistic constraint</strong>: <code>~&gt; 3.0</code> means “3.0 or newer, but still 3”, so any 3.x release is acceptable and 4.0 is not. Providers follow semantic versioning, so a major version bump can rename arguments and break your configuration. Pinning the major version lets you take bug fixes automatically and take breaking changes on purpose.</p>
 <p> Each provider can also have a <code>provider</code> block that configures it, in <code>providers.tf</code>:</p>
-<div class="sourceCode" id="cb5"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">provider</span> <span class="st">&quot;docker&quot;</span> {</span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  <span class="co"># talks to the local docker daemon; set host for a remote one, e.g.</span></span>
-<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>  <span class="co"># host = &quot;ssh://ubuntu@my-server&quot;</span></span>
-<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<div class="sourceCode" id="cb4"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">provider</span> <span class="st">&quot;docker&quot;</span> {</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  <span class="co"># talks to the local docker daemon; set host for a remote one, e.g.</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  <span class="co"># host = &quot;ssh://ubuntu@my-server&quot;</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
 <p>The block is empty because the default is correct: the Docker provider talks to the local daemon socket. An empty <code>provider</code> block is optional, but it is a good place to document where the provider’s settings and credentials come from.</p>
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
 <img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
@@ -102,73 +102,73 @@ Hello, World!</pre>
 <p><strong>Wut:</strong> There is no “top” of a configuration. You can refer to a resource defined in another file, or later in the same file, and the tool builds a dependency graph from every reference. If A mentions B, then B is created before A and destroyed after it. That single rule replaces most of the ordering you would write by hand in a script.</p>
 </div></div>
 <p><code>variables.tf</code> declares the one input:</p>
-<div class="sourceCode" id="cb6"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="kw">variable</span> <span class="st">&quot;port&quot;</span> {</span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>  type        <span class="op">=</span> <span class="dt">number</span></span>
-<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>  description <span class="op">=</span> <span class="st">&quot;Host port the web server is published on.&quot;</span></span>
-<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>  default     <span class="op">=</span> <span class="dv">8080</span></span>
-<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>  validation {</span>
-<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>    condition     <span class="op">=</span> <span class="va">var</span>.port <span class="op">&gt;</span> <span class="dv">1024</span> <span class="op">&amp;&amp;</span> <span class="va">var</span>.port <span class="op">&lt;</span> <span class="dv">65536</span></span>
-<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>    error_message <span class="op">=</span> <span class="st">&quot;port must be an unprivileged port (1025-65535).&quot;</span></span>
-<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>  }</span>
-<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<div class="sourceCode" id="cb5"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">variable</span> <span class="st">&quot;port&quot;</span> {</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  type        <span class="op">=</span> <span class="dt">number</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>  description <span class="op">=</span> <span class="st">&quot;Host port the web server is published on.&quot;</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>  default     <span class="op">=</span> <span class="dv">8080</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>  validation {</span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>    condition     <span class="op">=</span> <span class="va">var</span>.port <span class="op">&gt;</span> <span class="dv">1024</span> <span class="op">&amp;&amp;</span> <span class="va">var</span>.port <span class="op">&lt;</span> <span class="dv">65536</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>    error_message <span class="op">=</span> <span class="st">&quot;port must be an unprivileged port (1025-65535).&quot;</span></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
 <h2 data-number="2.4" id="building-the-image"><span class="header-section-number">2.4</span> Building the image</h2>
 <p>  <code>main.tf</code> begins with the image:</p>
-<div class="sourceCode" id="cb7"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">locals</span> {</span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  app_dir <span class="op">=</span> <span class="st">&quot;</span><span class="ss">${</span><span class="va">path.module</span><span class="ss">}</span><span class="st">/app&quot;</span></span>
-<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>  <span class="co"># changes whenever any file under app/ changes</span></span>
-<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>  app_hash <span class="op">=</span> <span class="bu">sha1</span>(<span class="bu">join</span>(<span class="st">&quot;&quot;</span>, [<span class="cf">for</span> f <span class="cf">in</span> <span class="bu">fileset</span>(<span class="va">local</span>.app_dir, <span class="st">&quot;**&quot;</span>) :</span>
-<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>    <span class="bu">filesha1</span>(<span class="st">&quot;</span><span class="ss">${</span><span class="va">local.app_dir</span><span class="ss">}</span><span class="st">/</span><span class="ss">${</span><span class="va">f</span><span class="ss">}</span><span class="st">&quot;</span>)</span>
-<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>  ]))</span>
-<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;docker_image&quot;</span> <span class="st">&quot;web&quot;</span> {</span>
-<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>  name <span class="op">=</span> <span class="st">&quot;motd:ch2&quot;</span></span>
-<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a>  build {</span>
-<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>    context <span class="op">=</span> <span class="va">local</span>.app_dir</span>
-<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a>  }</span>
-<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-16"><a href="#cb7-16" aria-hidden="true" tabindex="-1"></a>  triggers <span class="op">=</span> {</span>
-<span id="cb7-17"><a href="#cb7-17" aria-hidden="true" tabindex="-1"></a>    src <span class="op">=</span> <span class="va">local</span>.app_hash</span>
-<span id="cb7-18"><a href="#cb7-18" aria-hidden="true" tabindex="-1"></a>  }</span>
-<span id="cb7-19"><a href="#cb7-19" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<div class="sourceCode" id="cb6"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="kw">locals</span> {</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>  app_dir <span class="op">=</span> <span class="st">&quot;</span><span class="ss">${</span><span class="va">path.module</span><span class="ss">}</span><span class="st">/app&quot;</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>  <span class="co"># changes whenever any file under app/ changes</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>  app_hash <span class="op">=</span> <span class="bu">sha1</span>(<span class="bu">join</span>(<span class="st">&quot;&quot;</span>, [<span class="cf">for</span> f <span class="cf">in</span> <span class="bu">fileset</span>(<span class="va">local</span>.app_dir, <span class="st">&quot;**&quot;</span>) :</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>    <span class="bu">filesha1</span>(<span class="st">&quot;</span><span class="ss">${</span><span class="va">local.app_dir</span><span class="ss">}</span><span class="st">/</span><span class="ss">${</span><span class="va">f</span><span class="ss">}</span><span class="st">&quot;</span>)</span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>  ]))</span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;docker_image&quot;</span> <span class="st">&quot;web&quot;</span> {</span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>  name <span class="op">=</span> <span class="st">&quot;motd:ch2&quot;</span></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>  build {</span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>    context <span class="op">=</span> <span class="va">local</span>.app_dir</span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a>  triggers <span class="op">=</span> {</span>
+<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a>    src <span class="op">=</span> <span class="va">local</span>.app_hash</span>
+<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb6-19"><a href="#cb6-19" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
 <p>  A <code>locals</code> block defines <strong>local values</strong>: named expressions. Where a variable is set by the user, a local is computed by the configuration. Use one whenever you would otherwise write the same expression twice, or when an expression deserves a name. They are referenced as <code>local.NAME</code> (singular, which trips people up).</p>
 <p> <code>path.module</code> is the directory containing the configuration, so <code>"${path.module}/app"</code> is the <code>app</code> directory no matter where you run <code>tofu</code> from.</p>
-<p>   <code>app_hash</code> is the first expression with real machinery in it, so read it from the inside out. <code>fileset(dir, "**")</code> returns the set of every file under a directory. <code>[for f in ... : filesha1(...)]</code> is a <strong>for expression</strong>: it produces a new list by evaluating the expression after the colon once for each element. If you know list comprehensions from Python, it is the same idea with the parts in a different order. <code>join("", ...)</code> concatenates the hashes and <code>sha1</code> boils them down to one string that changes whenever any file in <code>app/</code> changes.</p>
+<p>   <code>app_hash</code> is the first expression with real machinery in it, so read it from the inside out. <code>fileset(dir, "**")</code> returns the set of every file under a directory. <code>[for f in ... : filesha1(...)]</code> is a <strong>for expression</strong>: it produces a new list by evaluating the expression after the colon once for each element. If you know list comprehensions from Python, it is the same idea with the <code>for</code> moved to the front: Python’s <code>[expr for x in xs]</code> is written <code>[for x in xs : expr]</code> here. <code>join("", ...)</code> concatenates the hashes and <code>sha1</code> boils them down to one string that changes whenever any file in <code>app/</code> changes.</p>
 <p><code>docker_image</code> is a resource type defined by the Docker provider, and the prefix before the first underscore is how you can tell: a type name starts with the name of the provider that defines it. That prefix is also what tells the tool which plugin the block belongs to. The provider defines a family of such types, <code>docker_container</code>, <code>docker_network</code>, and <code>docker_volume</code> among them, each with its own arguments and attributes, and the provider’s documentation lists all of them <span class="citation" data-cites="DockerProviderDocs">[1]</span>.</p>
 <p>The <code>build</code> block tells the Docker provider to build the image from that directory instead of pulling it. <code>triggers</code> is a map of values that force a rebuild when they change, and the source hash is the natural thing to put there. Without it, editing <code>main.go</code> would not rebuild anything, because the provider has no way to know the source changed.</p>
 <h2 data-number="2.5" id="running-the-container"><span class="header-section-number">2.5</span> Running the container</h2>
 <p>  Add the container to <code>main.tf</code>, after the image:</p>
-<div class="sourceCode" id="cb8"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;docker_container&quot;</span> <span class="st">&quot;web&quot;</span> {</span>
-<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>  name  <span class="op">=</span> <span class="st">&quot;motd&quot;</span></span>
-<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>  image <span class="op">=</span> docker_image.web.image_id</span>
-<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>  ports {</span>
-<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>    internal <span class="op">=</span> <span class="dv">8080</span></span>
-<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>    external <span class="op">=</span> <span class="va">var</span>.port</span>
-<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>  }</span>
-<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<div class="sourceCode" id="cb7"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;docker_container&quot;</span> <span class="st">&quot;web&quot;</span> {</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  name  <span class="op">=</span> <span class="st">&quot;motd&quot;</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>  image <span class="op">=</span> docker_image.web.image_id</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>  ports {</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>    internal <span class="op">=</span> <span class="dv">8080</span></span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>    external <span class="op">=</span> <span class="va">var</span>.port</span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
 <p> <code>image = docker_image.web.image_id</code> is a <strong>reference</strong> to another resource’s attribute. It does two things at once: it supplies the value, and it tells the tool that the container depends on the image, so the image is built first. Attributes like <code>image_id</code> are only known after the image exists, which is why plans show them as <code>(known after apply)</code>.</p>
 <p><code>ports</code> is a <strong>nested block</strong>, a block inside a resource that groups related arguments. A resource type can allow several of the same nested block, and a container with two published ports has two <code>ports</code> blocks.</p>
 <p>The two arguments are two sides of one door. <code>internal</code> is the port inside the container, the one the program listens on; <code>external</code> is the port on your machine that Docker connects to it. The web server always listens on 8080, so <code>internal</code> is fixed, but nothing outside the container has to know that: the container can publish it as any port you like, which is why <code>external</code> comes from a variable and <code>internal</code> does not. Set <code>port</code> to 9000 and <code>http://localhost:9000/</code> reaches a server that still thinks it is on 8080.</p>
 <h2 data-number="2.6" id="checking-the-result"><span class="header-section-number">2.6</span> Checking the result</h2>
 <p>   The last block in <code>main.tf</code> is a test:</p>
-<div class="sourceCode" id="cb9"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>check <span class="st">&quot;hello&quot;</span> {</span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">data</span> <span class="st">&quot;http&quot;</span> <span class="st">&quot;web&quot;</span> {</span>
-<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>    url <span class="op">=</span> <span class="st">&quot;http://localhost:</span><span class="ss">${</span><span class="va">docker_container.web.ports[0].external</span><span class="ss">}</span><span class="st">/&quot;</span></span>
-<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>    retry {</span>
-<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>      attempts     <span class="op">=</span> <span class="dv">5</span></span>
-<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>      min_delay_ms <span class="op">=</span> <span class="dv">1000</span></span>
-<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>    }</span>
-<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>  }</span>
-<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a>  assert {</span>
-<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a>    condition     <span class="op">=</span> <span class="bu">trimspace</span>(<span class="kw">data</span>.http.web.response_body) <span class="op">==</span> <span class="st">&quot;Hello, World!&quot;</span></span>
-<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a>    error_message <span class="op">=</span> <span class="st">&quot;the web server did not say hello&quot;</span></span>
-<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a>  }</span>
-<span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<div class="sourceCode" id="cb8"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>check <span class="st">&quot;hello&quot;</span> {</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">data</span> <span class="st">&quot;http&quot;</span> <span class="st">&quot;web&quot;</span> {</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>    url <span class="op">=</span> <span class="st">&quot;http://localhost:</span><span class="ss">${</span><span class="va">docker_container.web.ports[0].external</span><span class="ss">}</span><span class="st">/&quot;</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>    retry {</span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>      attempts     <span class="op">=</span> <span class="dv">5</span></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>      min_delay_ms <span class="op">=</span> <span class="dv">1000</span></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>  assert {</span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a>    condition     <span class="op">=</span> <span class="bu">trimspace</span>(<span class="kw">data</span>.http.web.response_body) <span class="op">==</span> <span class="st">&quot;Hello, World!&quot;</span></span>
+<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a>    error_message <span class="op">=</span> <span class="st">&quot;the web server did not say hello&quot;</span></span>
+<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
 <p>A <code>check</code> block is a unit test for infrastructure. It runs on every plan and apply, after everything else, and reports whether an assertion holds.</p>
 <p> Inside it is a <code>data</code> block, the first one in the booklet. A <strong>data source</strong> is a read-only lookup: where a resource creates something, a data source fetches something that already exists. <code>data "http"</code> fetches a URL and exposes the <code>status_code</code> and <code>response_body</code>. Data sources are referenced with a <code>data.</code> prefix, so the body is <code>data.http.web.response_body</code>.</p>
 <p>The URL references the container’s published port, and that reference is why the check waits for the container to exist. <code>retry</code> keeps trying for a few seconds because a container does not answer the instant it starts. The <code>assert</code> block then compares the body with what you expect.</p>
@@ -178,9 +178,9 @@ Hello, World!</pre>
 <p><strong>Wut:</strong> A failed <code>check</code> is a warning, not an error. Apply completes, the resources are all there, and the output says <code>Warning: Check block assertion failed</code>. That is deliberate: a check tests the result without holding the deployment hostage. When you want a failure to stop the apply, use a <code>precondition</code> or <code>postcondition</code> instead, which Chapter 3 describes.</p>
 </div></div>
 <p>Finally, add an output to <code>main.tf</code> that tells you where to look:</p>
-<div class="sourceCode" id="cb10"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="kw">output</span> <span class="st">&quot;url&quot;</span> {</span>
-<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>  value <span class="op">=</span> <span class="st">&quot;http://localhost:</span><span class="ss">${</span><span class="va">var.port</span><span class="ss">}</span><span class="st">/&quot;</span></span>
-<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<div class="sourceCode" id="cb9"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="kw">output</span> <span class="st">&quot;url&quot;</span> {</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>  value <span class="op">=</span> <span class="st">&quot;http://localhost:</span><span class="ss">${</span><span class="va">var.port</span><span class="ss">}</span><span class="st">/&quot;</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
 <h2 data-number="2.7" id="running-it"><span class="header-section-number">2.7</span> Running it</h2>
 <p>Initialize and plan from <code>webserver</code>:</p>
 <pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ tofu init</b>
@@ -269,7 +269,7 @@ Hello, World!</pre>
     }
 
 Plan: 2 to add, 0 to change, 2 to destroy.</pre>
-<p>The source hash changed, so the image is replaced; the image id will change, so the container is replaced. Apply, and the new server is running. That plan is the whole point of the chapter: from one edit to a Go file, the tool worked out the two things that have to happen.</p>
+<p>The source hash changed, so the image is replaced; the image id will change, so the container is replaced. Run <code>tofu apply</code>, and the old server shuts down while a new one starts. That plan is the whole point of the chapter: from one edit to a Go file, the tool worked out the two things that have to happen.</p>
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
 <img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
 <div style="flex: 1; min-width: 0;">
@@ -384,29 +384,29 @@ Destroy complete! Resources: 2 destroyed.</pre>
 <ol type="1">
 <li><p><strong>Think about it:</strong> The image resource has a <code>triggers</code> map holding a hash of the source directory. What would happen on the second <code>apply</code> if the hash were replaced with <code>timestamp()</code>? What would happen if <code>triggers</code> were removed entirely and you edited <code>main.go</code>?</p></li>
 <li><p><strong>What does this do?</strong> For the expression below, what is the type of the result and how many elements does it have when <code>app/</code> contains <code>main.go</code>, <code>go.mod</code>, and <code>Dockerfile</code>?</p>
-<div class="sourceCode" id="cb11"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>[<span class="cf">for</span> f <span class="cf">in</span> <span class="bu">fileset</span>(<span class="st">&quot;app&quot;</span>, <span class="st">&quot;*.go&quot;</span>) : <span class="bu">upper</span>(f)]</span></code></pre></div></li>
+<div class="sourceCode" id="cb10"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>[<span class="cf">for</span> f <span class="cf">in</span> <span class="bu">fileset</span>(<span class="st">&quot;app&quot;</span>, <span class="st">&quot;*.go&quot;</span>) : <span class="bu">upper</span>(f)]</span></code></pre></div></li>
 <li><p><strong>Calculation:</strong> A configuration pins <code>version = "~&gt; 3.4"</code> for a provider whose available releases are 3.3.0, 3.4.2, 3.9.0, and 4.0.1. Which release does <code>tofu init</code> install, and which is the newest it could ever install without editing the constraint?</p></li>
 <li><p><strong>Where is the bug?</strong></p>
-<div class="sourceCode" id="cb12"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;docker_container&quot;</span> <span class="st">&quot;web&quot;</span> {</span>
-<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>  name  <span class="op">=</span> <span class="st">&quot;motd&quot;</span></span>
-<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>  image <span class="op">=</span> docker_image.web.name</span>
-<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>  ports {</span>
-<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>    internal <span class="op">=</span> <span class="dv">8080</span></span>
-<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>    external <span class="op">=</span> <span class="va">var</span>.port</span>
-<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>  }</span>
-<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div></li>
+<div class="sourceCode" id="cb11"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;docker_container&quot;</span> <span class="st">&quot;web&quot;</span> {</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>  name  <span class="op">=</span> <span class="st">&quot;motd&quot;</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>  image <span class="op">=</span> docker_image.web.name</span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>  ports {</span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>    internal <span class="op">=</span> <span class="dv">8080</span></span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>    external <span class="op">=</span> <span class="va">var</span>.port</span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div></li>
 <li><p><strong>Where is the bug?</strong></p>
-<div class="sourceCode" id="cb13"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="kw">locals</span> {</span>
-<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>  app_dir <span class="op">=</span> <span class="st">&quot;</span><span class="ss">${</span><span class="va">path.module</span><span class="ss">}</span><span class="st">/app&quot;</span></span>
-<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;docker_image&quot;</span> <span class="st">&quot;web&quot;</span> {</span>
-<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>  name <span class="op">=</span> <span class="st">&quot;motd:ch2&quot;</span></span>
-<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>  build {</span>
-<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>    context <span class="op">=</span> <span class="kw">locals</span>.app_dir</span>
-<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>  }</span>
-<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div></li>
+<div class="sourceCode" id="cb12"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="kw">locals</span> {</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>  app_dir <span class="op">=</span> <span class="st">&quot;</span><span class="ss">${</span><span class="va">path.module</span><span class="ss">}</span><span class="st">/app&quot;</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;docker_image&quot;</span> <span class="st">&quot;web&quot;</span> {</span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>  name <span class="op">=</span> <span class="st">&quot;motd:ch2&quot;</span></span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>  build {</span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>    context <span class="op">=</span> <span class="kw">locals</span>.app_dir</span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div></li>
 <li><p><strong>Write a configuration</strong> that runs two copies of the web server on ports 8080 and 8081 from the same image, with a check for each. Then reduce the duplication with a variable of type <code>list(number)</code> and <code>count</code> (look it up), and compare the plans.</p></li>
 </ol>
 <h1 class="unnumbered" id="references">References</h1>
