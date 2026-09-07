@@ -33,7 +33,7 @@ The top-level blocks a configuration is made of, and the nested blocks that only
 | `variable "NAME" { }` | An input: `type`, `default`, `description`, `sensitive`, `validation` [@OTF_Variables] | 1 |
 | `output "NAME" { }` | A return value: `value`, `description`, `sensitive`, `precondition` [@OTF_Outputs] | 1 |
 | `locals { }` | Named expressions [@OTF_Locals] | 2 |
-| `module "NAME" { }` | Call a child module: `source`, `version`, its variables [@OTF_ModuleSyntax] | 4 |
+| `module "NAME" { }` | Call a child module: `source`, `version`, its variables [@OTF_ModuleSyntax] | 3 |
 | `check "NAME" { }` | A test that runs after plan and apply, holding `data` blocks and `assert` blocks [@OTF_Checks] | 2 |
 | `import { }` | Bring an existing object into state: `to`, `id` [@OTF_Import] | A |
 | `moved { }` | Record a rename: `from`, `to` [@OTF_Refactoring] | A |

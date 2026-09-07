@@ -421,7 +421,7 @@ The certificate has `common_name = "motd.example.com"` and `subject_alternative_
 On which day does `tofu plan` first show it being replaced, and if you apply only on the first of each month, how many days of validity does the old certificate have left on the day it is replaced?
 
 **Answer:** Let's Encrypt certificates last 90 days, so it expires on May 30th.
-Fewer than 30 days remain from April 30th, so a plan on April 30th first shows the replacement (a plan on April 29th sees 31 days).
+Thirty days or fewer remain from April 30th, and the provider renews at thirty, so a plan on April 30th first shows the replacement (a plan on April 29th sees 31 days).
 Applying on the first of each month, April 1st is too early (59 days left) and May 1st does it, with 29 days left on the old certificate.
 
 ---
