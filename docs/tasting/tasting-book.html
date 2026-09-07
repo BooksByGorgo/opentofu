@@ -1139,12 +1139,12 @@ Apply complete! Resources: 0 added, 0 changed, 0 destroyed.</pre>
 <li><p><strong>Write a configuration</strong> with a variable <code>path</code> that must end in <code>.txt</code> (use <code>endswith</code>), and a resource that writes the current date into that file with <code>date &gt; path</code>. Make sure a second apply does not rewrite the file, and that changing <code>path</code> does.</p></li>
 </ol>
 <h1 id="a-web-server-on-your-machine">A Web Server on Your Machine</h1>
-<p><strong>The need.</strong> A configuration that only runs <code>echo</code> is talking to itself. Real things live behind APIs: a container runtime, a cloud, a DNS service. The tool cannot know every API, so it needs a way to load the vocabulary for each one, to pin which version of that vocabulary everyone uses, and to authenticate without credentials in the files. Once there are several resources, they depend on each other, values have to be computed from other values, and something has to test that the result actually works.</p>
-<p><strong>Why it matters.</strong> Providers are how one language reaches every cloud and service, and version pinning is what makes a configuration produce the same result on a colleague’s machine next year. Dependencies derived from references are what replace the carefully ordered steps of a script. A check that runs after every apply is the difference between “it applied” and “it works”.</p>
+<p><strong>The need.</strong> A configuration that only runs <code>echo</code> is talking to itself. Real things live behind APIs: a container runtime, a cloud, a DNS service. The tool cannot know every API, so it needs a way to load the vocabulary for each one, to pin which version of that vocabulary everyone uses, and to authenticate without putting credentials in the files. Several resources depend on one another, values have to be computed from other values, and something has to test that the result actually works.</p>
+<p><strong>Why it matters.</strong> Providers are how one language reaches every cloud and service, and version pinning is what makes a configuration produce the same result on a colleague’s machine next year. Dependencies derived from references replace the carefully ordered steps of a script. A check that runs after every apply is the difference between “it applied” and “it works”.</p>
 <p><strong>Why it is hard.</strong> Every provider has its own authentication and its own release cadence, and a new major version can rename arguments. The order of operations is nowhere written down; it has to be inferred from what refers to what. A change in an input, like an edited source file, has to turn into a rebuild without anyone tracking it by hand.</p>
 <p><strong>The strategy.</strong> Load providers through <code>required_providers</code> with constrained versions and a lock file, keep credentials in the environment, and let references between resources build the dependency graph. Compute derived values with locals and functions, and finish with a <code>check</code> block that tests the result. The example that exercises all of it is a small Go web server: the Docker provider builds its image and runs the container, and the HTTP provider verifies that it answers.</p>
 <h2 id="the-program">The program</h2>
-<p> The web server is as small as a web server gets. Create the directory <code>webserver</code> for this chapter’s configuration, and put the program in <code>webserver/app/main.go</code>:</p>
+<p> The web The web server is as small as a web server gets. Create the directory <code>webserver</code> for this chapter’s configuration, and put the program in <code>webserver/app/main.go</code>:</p>
 <div class="sourceCode" id="cb9"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
 <span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
@@ -1191,9 +1191,9 @@ Hello, World!</pre>
 <span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a><span class="kw">EXPOSE</span> 8080</span>
 <span id="cb11-13"><a href="#cb11-13" aria-hidden="true" tabindex="-1"></a><span class="kw">ENTRYPOINT</span> [<span class="st">&quot;/motd&quot;</span>]</span></code></pre></div>
 <p>The result is an eight megabyte image with one file in it. Also add <code>app/.dockerignore</code> containing <code>.git</code>, so that the repository history does not get copied into the build.</p>
-<p>Do not run <code>docker build</code> yourself. Writing the Dockerfile is the whole of your job here; building the image from it is a resource in the configuration, and <code>tofu apply</code> will build it, and rebuild it whenever the source changes.</p>
+<p>Do not run <code>docker build</code> yourself. Writing the Dockerfile is the whole of your job here. The build belongs to a resource in the configuration: <code>tofu apply</code> builds the image, and rebuilds it whenever the source changes.</p>
 <h2 id="providers">Providers</h2>
-<p> The configuration files are in the <code>webserver</code> directory, which is the parent directory of <code>app</code>. This chapter splits configuration across several files, which is the normal way to organize a configuration, starting with <code>versions.tf</code>:</p>
+<p> The configuration files are in the <code>webserver</code> directory, which is the parent directory of <code>app</code>. This chapter splits the configuration across several files, which is the normal way to organize one. It starts with <code>versions.tf</code>:</p>
 <div class="sourceCode" id="cb12"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="kw">terraform</span> {</span>
 <span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">required_version</span> <span class="op">=</span> <span class="st">&quot;&gt;= 1.6&quot;</span></span>
 <span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -1215,7 +1215,7 @@ Hello, World!</pre>
 <span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>  <span class="co"># talks to the local docker daemon; set host for a remote one, e.g.</span></span>
 <span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>  <span class="co"># host = &quot;ssh://ubuntu@my-server&quot;</span></span>
 <span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
-<p>The block is empty because the default is correct: the Docker provider talks to the local daemon socket. An empty <code>provider</code> block is optional, but writing one is a good place to document where the provider’s settings and credentials come from.</p>
+<p>The block is empty because the default is correct: the Docker provider talks to the local daemon socket. An empty <code>provider</code> block is optional, but it is a good place to document where the provider’s settings and credentials come from.</p>
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
 <span class="callout-icon callout-trap" role="img" aria-label="trap"></span>
 <div style="flex: 1; min-width: 0;">
@@ -1227,7 +1227,7 @@ Hello, World!</pre>
 - Installing kreuzwerker/docker v3.9.0...</pre>
 <p>Two new things appear in <code>webserver</code>. <code>.terraform/</code> holds the downloaded plugins; it is a cache and belongs in <code>.gitignore</code>. <code>.terraform.lock.hcl</code> is the <strong>dependency lock file</strong>: it records the exact provider versions that were selected and their checksums, so that everyone who runs <code>init</code> on this configuration gets the same providers. In a real project you commit the lock file; Appendix A has the details, including what to do for colleagues on other platforms.</p>
 <h2 id="files-and-the-graph">Files and the graph</h2>
-<p>Every <code>.tf</code> file in <code>webserver</code> is part of the same configuration. The tool takes the union of all of them, as if they were one file, and then works out the order of operations from the <strong>references</strong> between blocks, not from the order of files or lines. You could put every block in a single <code>main.tf</code> and nothing would change; splitting the configuration into <code>versions.tf</code>, <code>providers.tf</code>, <code>variables.tf</code>, and <code>main.tf</code> is only for the humans.</p>
+<p>Every <code>.tf</code> file in <code>webserver</code> is part of the same configuration. The tool takes the union of all of them, as if they were one file, and then works out the order of operations from the <strong>references</strong> between blocks, not from the order of files or lines. You could put every block in a single <code>main.tf</code> and nothing would change; splitting the configuration into <code>versions.tf</code>, <code>providers.tf</code>, <code>variables.tf</code>, and <code>main.tf</code> is only for humans.</p>
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
 <span class="callout-icon callout-wut" role="img" aria-label="wut"></span>
 <div style="flex: 1; min-width: 0;">
@@ -1268,7 +1268,7 @@ Hello, World!</pre>
 <p> A <code>locals</code> block defines <strong>local values</strong>: named expressions. Where a variable is set by the user, a local is computed by the configuration. Use one whenever you would otherwise write the same expression twice, or when an expression deserves a name. They are referenced as <code>local.NAME</code> (singular, which trips people up).</p>
 <p> <code>path.module</code> is the directory containing the configuration, so <code>"${path.module}/app"</code> is the <code>app</code> directory no matter where you run <code>tofu</code> from.</p>
 <p> <code>app_hash</code> is the first expression with real machinery in it, so read it from the inside out. <code>fileset(dir, "**")</code> returns the set of every file under a directory. <code>[for f in ... : filesha1(...)]</code> is a <strong>for expression</strong>: it produces a new list by evaluating the expression after the colon once for each element. If you know list comprehensions from Python, it is the same idea with the parts in a different order. <code>join("", ...)</code> concatenates the hashes and <code>sha1</code> boils them down to one string that changes whenever any file in <code>app/</code> changes.</p>
-<p><code>docker_image</code> is a resource type defined by the Docker provider, and the prefix before the first underscore is how you can tell: the type name starts with the provider’s name, and that is also how the tool knows which plugin to hand the block to. The provider defines a family of such types, <code>docker_container</code>, <code>docker_network</code>, and <code>docker_volume</code> among them, each with its own arguments and attributes, and its documentation lists all of them <span class="citation" data-cites="DockerProviderDocs">[1]</span>.</p>
+<p><code>docker_image</code> is a resource type defined by the Docker provider, and the prefix before the first underscore is how you can tell: a type name starts with the name of the provider that defines it. That prefix is also what tells the tool which plugin the block belongs to. The provider defines a family of such types, <code>docker_container</code>, <code>docker_network</code>, and <code>docker_volume</code> among them, each with its own arguments and attributes, and the provider’s documentation lists all of them <span class="citation" data-cites="DockerProviderDocs">[1]</span>.</p>
 <p>The <code>build</code> block tells the Docker provider to build the image from that directory instead of pulling it. <code>triggers</code> is a map of values that force a rebuild when they change, and the source hash is the natural thing to put there. Without it, editing <code>main.go</code> would not rebuild anything, because the provider has no way to know the source changed.</p>
 <h2 id="running-the-container">Running the container</h2>
 <p> Add the container to <code>main.tf</code>, after the image:</p>
@@ -1303,7 +1303,7 @@ Hello, World!</pre>
 <span id="cb17-15"><a href="#cb17-15" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
 <p>A <code>check</code> block is a unit test for infrastructure. It runs on every plan and apply, after everything else, and reports whether an assertion holds.</p>
 <p> Inside it is a <code>data</code> block, the first one in the booklet. A <strong>data source</strong> is a read-only lookup: where a resource creates something, a data source fetches something that already exists. <code>data "http"</code> fetches a URL and exposes the <code>status_code</code> and <code>response_body</code>. Data sources are referenced with a <code>data.</code> prefix, so the body is <code>data.http.web.response_body</code>.</p>
-<p>The URL references the container’s published port, and that reference is what makes the check wait for the container to exist. <code>retry</code> keeps trying for a few seconds because a container answers a moment after it starts. The <code>assert</code> block then compares the body with what you expect.</p>
+<p>The URL references the container’s published port, and that reference is why the check waits for the container to exist. <code>retry</code> keeps trying for a few seconds because a container does not answer the instant it starts. The <code>assert</code> block then compares the body with what you expect.</p>
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
 <span class="callout-icon callout-wut" role="img" aria-label="wut"></span>
 <div style="flex: 1; min-width: 0;">
@@ -1342,7 +1342,7 @@ Hello, World!</pre>
 Plan: 2 to add, 0 to change, 0 to destroy.
 
 Warning: Check block assertion known after apply</pre>
-<p>The two resources are listed with every argument the provider knows about, most of them defaults you did not write, and the container’s <code>image</code> is <code>(known after apply)</code> because it comes from an image that does not exist yet. The check’s data source is deferred to apply for the same reason.</p>
+<p>The two resources are listed with every argument the provider knows about, most of them defaults you did not write. The container’s <code>image</code> is <code>(known after apply)</code> because it refers to a resource that does not exist yet. The check’s data source is deferred to apply for the same reason.</p>
 <p>The warning is the check saying it cannot run yet because the container does not exist. Apply, and it runs at the end:</p>
 <pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ tofu apply</b>
 docker_image.web: Creating...
@@ -1357,7 +1357,7 @@ Outputs:
 url = "http://localhost:8080/"</pre>
 <pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ curl localhost:8080/</b>
 Hello, World!</pre>
-<p>Before changing any code, change the port from the command line and watch it move:</p>
+<p>Before changing any code, change the port from the command line and watch the server move:</p>
 <pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ tofu apply -auto-approve -var "port=8888"</b>
   # docker_container.web must be replaced
 -/+ resource "docker_container" "web" {
@@ -1401,7 +1401,7 @@ Hello, World!</pre>
     }
 
 Plan: 2 to add, 0 to change, 2 to destroy.</pre>
-<p>The source hash changed, so the image is replaced; the image id will change, so the container is replaced. Apply, and the new server is running. That plan is the whole point of the chapter: the tool worked out the two things that need to happen from one edit to a Go file.</p>
+<p>The source hash changed, so the image is replaced; the image id will change, so the container is replaced. Apply, and the new server is running. That plan is the whole point of the chapter: from one edit to a Go file, the tool worked out the two things that have to happen.</p>
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
 <span class="callout-icon callout-tip" role="img" aria-label="tip"></span>
 <div style="flex: 1; min-width: 0;">
@@ -1428,7 +1428,7 @@ Destroy complete! Resources: 2 destroyed.</pre>
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
 <span class="callout-icon callout-trap" role="img" aria-label="trap"></span>
 <div style="flex: 1; min-width: 0;">
-<p><strong>Trap:</strong> <code>tofu destroy</code> destroys everything in the state, and in later chapters that includes a database full of data and a machine in the cloud. For things you want to keep, add <code>lifecycle { prevent_destroy = true }</code> to the resource, which makes any plan that would destroy it fail. Alternatively, <code>tofu state rm ADDRESS</code> makes the tool forget a resource without deleting it, and a later <code>tofu apply</code> would then try to create it again.</p>
+<p><strong>Trap:</strong> <code>tofu destroy</code> destroys everything in the state, and in later chapters that includes a database full of data and a machine in the cloud. For things you want to keep, add <code>lifecycle { prevent_destroy = true }</code> to the resource, which makes any plan that would destroy it fail. Alternatively, <code>tofu state rm ADDRESS</code> makes the tool forget a resource without deleting it, and a later <code>tofu apply</code> will then try to create it again.</p>
 </div></div>
 <h2 id="key-points-1">Key Points</h2>
 <ul>
