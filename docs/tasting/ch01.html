@@ -169,7 +169,7 @@ Error: Invalid value for variable
 greeting must not be blank.
 
 This was checked by the validation rule at main.tf:10,3-13.</pre>
-<p>  The condition uses two built-in <strong>functions</strong>. <code>trimspace</code> strips leading and trailing whitespace and <code>length</code> counts characters. Functions are called the way you would expect. There are a lot of them: string, number, collection, date, hash, and file functions. You will meet more of them as the booklet goes on, and the full list is in the documentation.</p>
+<p>  The condition uses two built-in <strong>functions</strong>. <code>trimspace</code> strips leading and trailing whitespace and <code>length</code> counts characters. Functions are called the way you would expect. There are a lot of them: string, number, collection, date, hash, and file functions. You will see more of them as the booklet goes on, and the full list is in the documentation.</p>
 <p><strong>Layer 4: the plan.</strong> <code>tofu plan</code> is the last check before anything happens. It runs every layer above it, then talks to the real world and tells you what would change. Later chapters add two more validation tools that run during plan and apply: <code>check</code> blocks that test the result (Chapter 2), and <code>precondition</code> and <code>postcondition</code> blocks that make assumptions explicit (Chapter 3).</p>
 <h2 data-number="1.7" id="changing-things"><span class="header-section-number">1.7</span> Changing things</h2>
 <p>Apply the new configuration, then apply it again with a different greeting:</p>
