@@ -9,8 +9,8 @@ nav_order: 1
 <h1 data-number="1" id="hello-world"><span class="header-section-number">1</span> Hello, World</h1>
 <p><strong>The need.</strong> You have something that must exist: a running program, a server, a database, a DNS record. Today you make it exist by typing commands, clicking through a console, or following a wiki page that was accurate two years ago. Tomorrow you need it again on another machine, or you need to change one thing, or a colleague needs to know what you did.</p>
 <p><strong>Why it matters.</strong> Infrastructure you cannot reproduce is infrastructure you cannot fix, review, or hand off. Writing it down as code means it can be versioned, diffed, reviewed in a pull request, and rebuilt from nothing after a disaster or a mistake.</p>
-<p><strong>Why it is hard.</strong> The world is stateful. A script that creates a server works the first time and fails the second time because the server already exists. Steps depend on each other, they fail halfway through, and the only record of what exists is whatever you remember.</p>
-<p><strong>The strategy.</strong> Instead of writing steps, you describe the desired end state in files. The tool compares the files with what exists, shows you the difference as a plan, and applies only the difference. It remembers what it created in a state file so that the next run starts from what is really there. This chapter builds the smallest possible example of that loop: a configuration that runs <code>echo hello world</code>.</p>
+<p><strong>Why it is hard.</strong> The world is stateful. A script that creates a server works the first time and fails the second time because the server already exists. Steps depend on each other, scripts fail halfway through, and the only record of what exists is whatever you remember.</p>
+<p><strong>The strategy.</strong> Instead of writing steps, you describe the desired end state in files. The tool compares the files with what exists, shows you the difference as a plan, and applies only the difference. It remembers what it created in a state file so that the next run starts from what is already there. This chapter builds the smallest possible example of that loop: a configuration that runs <code>echo hello world</code>.</p>
 <h2 data-number="1.1" id="the-smallest-configuration"><span class="header-section-number">1.1</span> The smallest configuration</h2>
 <p>  Create the directory <code>hello-world</code>, and in it a file named <code>main.tf</code>:</p>
 <div class="sourceCode" id="cb1"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">resource</span> <span class="st">&quot;terraform_data&quot;</span> <span class="st">&quot;hello&quot;</span> {</span>
@@ -23,7 +23,7 @@ nav_order: 1
 <p>   A <code>resource</code> block is a noun: a thing that should exist. Its first label is the resource <strong>type</strong>, which decides what kind of thing it is and which arguments it accepts. <code>terraform_data</code> is a built-in resource type that manages nothing at all. It is a placeholder: a thing that exists only so that you can attach behavior to it or hang other things off it. That makes it perfect for a first example, because it needs no accounts, no plugins, and no network. Its second label is the <strong>name</strong>, which is how the rest of the configuration refers to this particular one. Together they form the address <code>terraform_data.hello</code>.</p>
 <p>  A <code>provisioner</code> block says “when this resource is created, also do this”. <code>local-exec</code> runs a shell command on the machine where you run <code>tofu</code>. Provisioners are an escape hatch that you will use rarely in real work (see Appendix A), but they let the tool run <code>echo</code>, which is exactly what you want right now.</p>
 <h2 data-number="1.2" id="the-workflow"><span class="header-section-number">1.2</span> The workflow</h2>
-<p> Every configuration directory must be initialized with <code>init</code>. <code>hello-world</code> must be initialized with:</p>
+<p> Every configuration directory must be initialized with <code>init</code>. Initialize <code>hello-world</code>:</p>
 <pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ tofu init</b>
 OpenTofu has been successfully initialized!</pre>
 <p><code>init</code> prepares the working directory: it downloads any plugins the configuration needs and sets up where state is stored. This configuration needs no plugins, so <code>init</code> has almost nothing to do, but it is still required. You run it again whenever the plugins or the state settings change; the tool reminds you when you forget.</p>
@@ -37,7 +37,7 @@ OpenTofu will perform the following actions:
     }
 
 Plan: 1 to add, 0 to change, 0 to destroy.</pre>
-<p> The <strong>plan</strong> is a diff between the files and reality. <code>+</code> means create, <code>-</code> means destroy, <code>~</code> means change in place, and <code>-/+</code> means destroy and recreate. <code>(known after apply)</code> marks values that only exist once the thing is real, like an id. The last line is the summary you learn to read first.</p>
+<p> The <strong>plan</strong> is a diff between the files and reality. <code>+</code> means create, <code>-</code> means destroy, <code>~</code> means change in place, and <code>-/+</code> means destroy and recreate. <code>(known after apply)</code> marks values, like an id, that only exist once the thing is real. The last line is the summary you learn to read first.</p>
 <p> Now make it so:</p>
 <pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ tofu apply</b>
 Plan: 1 to add, 0 to change, 0 to destroy.
@@ -61,7 +61,7 @@ Apply complete! Resources: 1 added, 0 changed, 0 destroyed.</pre>
 No changes. Your infrastructure matches the configuration.
 
 Apply complete! Resources: 0 added, 0 changed, 0 destroyed.</pre>
-<p> This is the most important idea in the booklet. You did not tell the tool to run <code>echo</code>; you told it that a <code>terraform_data.hello</code> should exist. It already exists, so there is nothing to do. A configuration describes an end state, and applying it twice is safe.</p>
+<p> This is the most important idea in the booklet. You did not tell the tool to run <code>echo</code> — you told it that <code>terraform_data.hello</code> should exist. It already exists, so there is nothing to do. A configuration describes an end state, and applying it twice is safe.</p>
 <p> Finally, take it all back:</p>
 <pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ tofu destroy</b>
 terraform_data.hello: Destroying... [id=3619212a-1cff-2c5e-3400-ff0bbf709872]
@@ -82,14 +82,14 @@ main.tf  terraform.tfstate</pre>
 <p>You can ask what the state contains:</p>
 <pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ tofu state list</b>
 terraform_data.hello</pre>
-<p>State is a JSON file, and you will be tempted to read it. Reading is fine. Editing it by hand is how you end up with a tool that thinks a server exists when it does not, or the other way around. Use <code>tofu state</code> subcommands when you need to change it (Appendix A lists them).</p>
+<p>State is a JSON file, so you will be tempted to read it. Reading is fine. Editing it by hand is how you end up with a tool that thinks a server exists when it does not, or misses one that does. Use <code>tofu state</code> subcommands when you need to change it (Appendix A lists them).</p>
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
 <img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
 <div style="flex: 1; min-width: 0;">
-<p><strong>Trap:</strong> State often contains secrets: passwords, keys, and tokens end up in it as attributes. Never commit <code>terraform.tfstate</code> to git. Add <code>*.tfstate</code> and <code>*.tfstate.*</code> to <code>.gitignore</code> before your first <code>apply</code>, not after. Chapter 5 talks about where state should live when more than one person works on it.</p>
+<p><strong>Trap:</strong> State often contains secrets, because passwords, keys, and tokens end up in it as ordinary attributes. Never commit <code>terraform.tfstate</code> to git. Add <code>*.tfstate</code> and <code>*.tfstate.*</code> to <code>.gitignore</code> before your first <code>apply</code>, not after. Chapter 5 talks about where state should live when more than one person works on it.</p>
 </div></div>
 <h2 data-number="1.4" id="making-it-configurable"><span class="header-section-number">1.4</span> Making it configurable</h2>
-<p>Hard-coding “hello world” in the command is fine for a demo and useless for anything else. Replace <code>main.tf</code> with a version that can be told what to say:</p>
+<p>Hard-coding “hello world” in the command is fine for a demo and useless for anything else. Replace <code>main.tf</code> with a version that takes the greeting as an input:</p>
 <div class="sourceCode" id="cb2"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">terraform</span> {</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">required_version</span> <span class="op">=</span> <span class="st">&quot;&gt;= 1.6&quot;</span> <span class="co"># OpenTofu 1.6, Terraform 1.6, or newer</span></span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>}</span>
@@ -120,27 +120,27 @@ terraform_data.hello</pre>
 <span id="cb2-28"><a href="#cb2-28" aria-hidden="true" tabindex="-1"></a>  value       <span class="op">=</span> terraform_data.hello.<span class="kw">output</span></span>
 <span id="cb2-29"><a href="#cb2-29" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
 <p>There is a lot of new syntax here, so take it a block at a time, and read the comments as you go.</p>
-<p>  The <code>terraform</code> block holds settings for the tool itself. <code>required_version</code> refuses to run with a tool older than 1.6, which is when OpenTofu began. A version constraint is a promise about what you tested with, so that a colleague with an old install gets a clear error instead of a strange one.</p>
-<p>  A <code>variable</code> block declares an <strong>input variable</strong>: a value the user of the configuration can set. Think of it as a function parameter. <code>type</code> says what kind of value is allowed, <code>description</code> explains it, and <code>default</code> makes it optional. A variable without a default must be supplied, or <code>apply</code> will stop and ask for it.</p>
+<p>  The <code>terraform</code> block holds settings for the tool itself. <code>required_version</code> refuses to run with a tool older than 1.6 — the release where OpenTofu began. A version constraint is a promise about what you tested with. It means a colleague with an old install gets a clear error instead of a strange one.</p>
+<p>  A <code>variable</code> block declares an <strong>input variable</strong>: a value the user of the configuration can set. Think of it as a function parameter. <code>type</code> says what kind of value is allowed, <code>description</code> explains what the variable is for, and <code>default</code> makes it optional. A variable without a default must be supplied, or <code>apply</code> will stop and ask for it.</p>
 <p> Inside expressions the variable is <code>var.greeting</code>. The <code>var.</code> prefix is there so that variables cannot be confused with resources.</p>
-<p> <code>"echo '${self.input}'"</code> is a string with an <strong>interpolation</strong>. Read <code>${...}</code> as “paste the value of this expression here”. Anything outside the braces is literal text. When the whole value is one expression, you do not need a string at all: <code>input = var.greeting</code> pastes nothing, it just refers.</p>
-<p> <code>self</code> is the resource the provisioner belongs to. <code>terraform_data</code> has an <code>input</code> argument that stores any value you like and an <code>output</code> attribute that echoes it back after creation, which is a convenient way to move a value into the provisioner.</p>
+<p> <code>"echo '${self.input}'"</code> is a string with an <strong>interpolation</strong>. Read <code>${...}</code> as “paste the value of this expression here”. Anything outside the braces is literal text. When the whole value is one expression, you do not need a string at all: <code>input = var.greeting</code> refers to the value directly instead of pasting it into text.</p>
+<p> <code>self</code> is the resource the provisioner belongs to. <code>terraform_data</code> has an <code>input</code> argument that stores any value you like and an <code>output</code> attribute that echoes it back after creation. Together they are a convenient way to move a value into the provisioner.</p>
 <p>  An <code>output</code> block declares an <strong>output value</strong>: something the configuration reports when it finishes. It is the return value of the function. Outputs are printed at the end of <code>apply</code>, and you can read them any time with <code>tofu output</code>:</p>
 <pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ tofu output</b>
 greeting = "hello world"</pre>
 <pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ tofu output -raw greeting</b>
 hello world</pre>
-<p><code>-raw</code> prints the bare value with no quotes, which is what you want when feeding an output to another command.</p>
+<p><code>-raw</code> prints the value with no quotes, which is what you want when feeding an output to another command.</p>
 <h2 data-number="1.5" id="setting-variables"><span class="header-section-number">1.5</span> Setting variables</h2>
 <p>   There are three ways to supply a variable, and you will use all of them:</p>
 <pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ tofu apply -var 'greeting=hola mundo'</b></pre>
 <pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ TF_VAR_greeting='hola mundo' tofu apply</b></pre>
 <p>Or put values in a file named <code>terraform.tfvars</code>, which is loaded automatically:</p>
 <div class="sourceCode" id="cb3"><pre class="sourceCode terraform"><code class="sourceCode terraform"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>greeting <span class="op">=</span> <span class="st">&quot;hola mundo&quot;</span></span></code></pre></div>
-<p>The command line wins over the file, which wins over the environment, which wins over the default. The environment form is how you pass values in from scripts and CI without putting them on a command line where <code>ps</code> can see them.</p>
+<p>The command line wins over the file, which wins over the environment, which wins over the default. The environment form is how you pass values from scripts and CI without putting them on a command line where <code>ps</code> can see them.</p>
 <h2 data-number="1.6" id="validation"><span class="header-section-number">1.6</span> Validation</h2>
-<p> A configuration can be wrong in several ways, and the tool checks for them in layers. The earlier a layer catches a problem, the cheaper it is.</p>
-<p> <strong>Layer 1: formatting.</strong> <code>tofu fmt</code> rewrites your files in the canonical style: two-space indentation, aligned <code>=</code> signs, no trailing spaces. Run it before every commit, or let your editor run it on save. <code>tofu fmt -check</code> exits non-zero if anything would change, which is what CI runs, and <code>tofu fmt -diff</code> shows what it would change without changing it:</p>
+<p> A configuration can be wrong in several ways, and the tool checks for each kind in its own layer. The earlier a layer catches a problem, the cheaper it is.</p>
+<p> <strong>Layer 1: formatting.</strong> <code>tofu fmt</code> rewrites your files in the canonical style: two-space indentation, aligned <code>=</code> signs, no trailing spaces. Run it before every commit, or let your editor run it on save. CI runs <code>tofu fmt -check</code>, which exits non-zero if anything would change. <code>tofu fmt -diff</code> shows what it would rewrite, without rewriting it:</p>
 <pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ tofu fmt -diff</b>
 --- old/main.tf
 +++ new/main.tf
@@ -149,7 +149,7 @@ hello world</pre>
 -    value="hello"
 +  value = "hello"
  }</pre>
-<p> <strong>Layer 2: structure.</strong> <code>tofu validate</code> checks syntax, that every referenced thing exists, and that every argument is one the resource type accepts. It needs no credentials and touches nothing, so it is safe to run anywhere. Misspell <code>command</code> as <code>comand</code> and it tells you:</p>
+<p> <strong>Layer 2: structure.</strong> <code>tofu validate</code> checks that the syntax is valid, that every referenced thing exists, and that every argument is one the resource type accepts. It needs no credentials and touches nothing, so it is safe to run anywhere. Misspell <code>command</code> as <code>comand</code> and it tells you:</p>
 <pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ tofu validate</b>
 Error: Unsupported argument
 
@@ -169,8 +169,8 @@ Error: Invalid value for variable
 greeting must not be blank.
 
 This was checked by the validation rule at main.tf:10,3-13.</pre>
-<p>  The condition uses two built-in <strong>functions</strong>. <code>trimspace</code> strips leading and trailing whitespace and <code>length</code> counts characters. Functions are called the way you would expect, and there are a lot of them: string, number, collection, date, hash, and file functions. You will meet more of them as the booklet goes on, and the full list is in the documentation.</p>
-<p><strong>Layer 4: the plan.</strong> <code>tofu plan</code> is the last check before anything happens. It runs every layer above it, then talks to the real world and tells you what would change. Later chapters add two more validation tools that run during plan and apply: <code>precondition</code> and <code>postcondition</code> blocks that make assumptions explicit (Chapter 3), and <code>check</code> blocks that test the result (Chapter 2).</p>
+<p>  The condition uses two built-in <strong>functions</strong>. <code>trimspace</code> strips leading and trailing whitespace and <code>length</code> counts characters. Functions are called the way you would expect. There are a lot of them: string, number, collection, date, hash, and file functions. You will meet more of them as the booklet goes on, and the full list is in the documentation.</p>
+<p><strong>Layer 4: the plan.</strong> <code>tofu plan</code> is the last check before anything happens. It runs every layer above it, then talks to the real world and tells you what would change. Later chapters add two more validation tools that run during plan and apply: <code>check</code> blocks that test the result (Chapter 2), and <code>precondition</code> and <code>postcondition</code> blocks that make assumptions explicit (Chapter 3).</p>
 <h2 data-number="1.7" id="changing-things"><span class="header-section-number">1.7</span> Changing things</h2>
 <p>Apply the new configuration, then apply it again with a different greeting:</p>
 <pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ tofu apply -var 'greeting=hola mundo'</b>
@@ -189,10 +189,10 @@ Plan: 1 to add, 0 to change, 1 to destroy.
 ...
 terraform_data.hello (local-exec): hola mundo</pre>
 <p>  The plan says the resource “must be replaced”, and the changed <code>triggers_replace</code> list is why. Some changes can be made in place; others need the old thing destroyed and a new one created. Each resource type decides which is which, and the plan always tells you: <code>~</code> for an update in place, <code>-/+</code> for a replacement.</p>
-<p><code>triggers_replace</code> deserves a closer look, because it is doing the real work in this configuration. It takes a list of values. When the resource is created, the tool records the list in state along with everything else about the resource. On every later plan it evaluates the list again and compares it with what was recorded. If every element is the same, the resource is left alone; if any element differs, the resource is planned for replacement, whatever else did or did not change. Think of the list as the resource’s identity: as long as the identity holds, it is the same thing; when the identity changes, it is a different thing, and a different thing has to be created.</p>
-<p>Why does <code>terraform_data</code> need such an argument when other resource types do not? A container or a database has real attributes, and the provider knows which of them can be changed in place and which cannot; a new image, for instance, means a new container. <code>terraform_data</code> manages nothing real, so nothing about it ever <em>needs</em> replacing, and by itself the tool would happily update <code>input</code> in place forever. <code>triggers_replace</code> is how you tell it which values matter. Here the greeting is listed, so a new greeting means a new resource, and because provisioners run at creation, a new resource means another <code>echo</code>. That is also why the greeting appears twice in the block: <code>input</code> carries it to the provisioner through <code>self.input</code>, and <code>triggers_replace</code> makes a change to it count.</p>
-<p>The list can hold more than one value, and any one of them changing is enough. When you want a replacement without changing anything, <code>tofu apply -replace=terraform_data.hello</code> forces one from the command line. Chapter 3 introduces <code>replace_triggered_by</code>, the general version of the same idea that works on any resource type and watches other resources instead of values.</p>
-<p>Run the same apply a second time, with the same greeting, and nothing is executed:</p>
+<p><code>triggers_replace</code> deserves a closer look, because it is doing the real work in this configuration. It takes a list of values. When the resource is created, the tool records the list in state along with everything else about the resource. On every later plan it evaluates the list again and compares it with what was recorded. If every element is the same, the resource is left alone; if any element differs, the resource is planned for replacement, no matter what else changed. Think of the list as the resource’s identity: as long as the identity holds, it is the same thing; when the identity changes, it is a different thing, and has to be created.</p>
+<p>Why does <code>terraform_data</code> need such an argument when other resource types do not? A container or a database has real attributes, and the provider knows which of them can be changed in place and which cannot; a new image, for instance, means a new container. <code>terraform_data</code> manages nothing real, so no part of it ever <em>needs</em> replacing. Left alone, the tool would happily update <code>input</code> in place forever. <code>triggers_replace</code> is how you tell it which values matter. Here the greeting is listed, so a new greeting means a new resource, and because provisioners run at creation, a new resource means another <code>echo</code>. That is also why the greeting appears twice in the block: <code>input</code> carries it to the provisioner through <code>self.input</code>, and <code>triggers_replace</code> turns a changed greeting into a replacement.</p>
+<p>The list can hold more than one value, and a change to any one of them is enough to replace the resource. When you want a replacement without changing anything, <code>tofu apply -replace=terraform_data.hello</code> forces one from the command line. Chapter 3 introduces <code>replace_triggered_by</code>, the general form of this idea: it works on any resource type and watches other resources instead of values.</p>
+<p>Run the same apply a second time, with the same greeting, and nothing happens:</p>
 <pre class="session" style="background-color: #f4f4f4; border: 1px solid #999; border-radius: 4px; padding: 8px 12px; margin: 1em 0; overflow-x: auto;"><b>$ tofu apply -var 'greeting=hola mundo'</b>
 No changes. Your infrastructure matches the configuration.
 
@@ -206,7 +206,7 @@ Apply complete! Resources: 0 added, 0 changed, 0 destroyed.</pre>
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
 <img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
 <div style="flex: 1; min-width: 0;">
-<p><strong>Tip:</strong> Provisioners are the tool’s escape hatch and Appendix A explains why they are a last resort in real projects. Chapter 2 replaces <code>echo</code> with resources that talk to real APIs. Even so, <code>terraform_data</code> plus <code>local-exec</code> is a fine way to glue in a command that has no provider, as Chapter 4 does with <code>kind load</code>.</p>
+<p><strong>Tip:</strong> Provisioners are the tool’s escape hatch, and Appendix A explains why they are a last resort in real projects. Chapter 2 replaces <code>echo</code> with resources that talk to real APIs. Even so, <code>terraform_data</code> plus <code>local-exec</code> is a fine way to glue in a command that has no provider, as Chapter 4 does with <code>kind load</code>.</p>
 </div></div>
 <h2 data-number="1.8" id="key-points"><span class="header-section-number">1.8</span> Key Points</h2>
 <ul>
@@ -277,9 +277,9 @@ Apply complete! Resources: 0 added, 0 changed, 0 destroyed.</pre>
 <ul>
 <li>Change the command to <code>date</code> and apply twice. Why does the time not update? Make it update on every apply with <code>triggers_replace = [timestamp()]</code>, and then read the plan to see what that costs you.</li>
 <li>Remove the <code>default</code> from the variable and run <code>tofu plan</code>. Then supply the value each of the three ways.</li>
-<li>Add a second <code>terraform_data</code> resource whose command prints the first one’s <code>output</code>, and look at the order the two run in. Then reverse the reference and see the order flip.</li>
+<li>Add a second <code>terraform_data</code> resource whose command prints the first one’s <code>output</code>, and look at which one runs first. Then reverse the reference and see the order flip.</li>
 <li>Save a plan with <code>tofu plan -out=hello.tfplan</code> and apply it with <code>tofu apply hello.tfplan</code>. Notice that the saved plan does not ask for confirmation.</li>
-<li>Delete <code>terraform.tfstate</code> after an apply and run <code>tofu apply</code> again. What happens and why? (This is why you never lose the state file of anything that matters.)</li>
+<li>Delete <code>terraform.tfstate</code> after an apply and run <code>tofu apply</code> again. What happens and why? (This is why you make sure you never lose the state file for anything that matters.)</li>
 </ul>
 <h2 data-number="1.11" id="exercises"><span class="header-section-number">1.11</span> Exercises</h2>
 <ol type="1">
