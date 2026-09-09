@@ -124,7 +124,7 @@ Everything here applies to OpenTofu and Terraform alike unless a line says other
 - `tofu plan -refresh-only` to see drift (changes made outside OpenTofu) without planning any fixes, and `tofu apply -refresh-only` to accept it into the state [@OTF_Plan; @OTF_Refresh].
 - `tofu apply -replace=ADDRESS` to force one resource to be recreated, instead of tainting or deleting things [@OTF_Plan].
 - `TF_LOG=DEBUG tofu plan` when a provider does something inexplicable; it prints every API call [@OTF_Debugging].
-- `tofu test` with `.tftest.hcl` files for modules that deserve tests [@OTF_Test].
+- `tofu test` with `.tftest.hcl` files for modules that other configurations depend on [@OTF_Test].
 - `tofu providers schema -json` to see every argument a provider accepts when the documentation and reality disagree [@OTF_ProvidersSchema].
 
 ### Staying compatible with both tools
