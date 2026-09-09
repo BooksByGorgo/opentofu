@@ -96,6 +96,8 @@
     for (var i = 0; i < blocks.length; i++) {
       // Skip a pre that sits inside another pre and the table of contents.
       if (blocks[i].closest('pre pre, #TOC')) { continue; }
+      // Skip a block fenced as {.lang .nocopy}: pandoc puts the class on the pre.
+      if (blocks[i].classList.contains('nocopy')) { continue; }
       addButton(blocks[i]);
     }
   }

@@ -5,13 +5,11 @@ resource "random_password" "db" {
 
 resource "local_file" "seed" {
   filename = "${path.module}/seed/001-sayings.sql"
-  content = templatefile("${path.module}/sayings.sql.tftpl", {
-    sayings = local.sayings
-  })
+  content  = module.sayings.sql
 
   lifecycle {
     precondition {
-      condition     = length(local.sayings) == 3600
+      condition     = length(module.sayings.sayings) == 3600
       error_message = "need exactly 3600 sayings, one per second of the hour."
     }
   }

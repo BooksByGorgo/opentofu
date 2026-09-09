@@ -26,13 +26,14 @@ the booklet is its own repo opentofu, organized like ../go: the book lives in `t
 
 # format and style
 
+- every text file is LF on every platform; `.gitattributes` sets `* text=auto eol=lf`, so never commit CRLF and never "preserve" it when rewriting a file. the sayings module splits its word lists on `\n` alone, so a CRLF checkout puts a carriage return in every prefix and suffix, and from there into the generated SQL
 - pandoc markdown; do not use emdash or endash, use --- or -- instead
 - refer to the reader as `you`; tone professional but light; emojis are fine
 - setup instructions always cover macOS, Linux, and Windows (winget ids: OpenTofu.Tofu, GoLang.Go, Kubernetes.kind, Kubernetes.kubectl); ch00 has the PowerShell translation table for the shell syntax the sessions use, so sessions stay POSIX
 - say "correct", not "right", for correctness ("right now" and "right-hand" are fine)
 - do not use the word "shape" in prose; say form, pattern, or example (the oracle `shape` argument in code is the one exception)
 - do not wrap sentences. every sentence gets its own line
-- configuration blocks are fenced as `terraform` (pandoc has no `hcl` highlighter); also `go`, `dockerfile`, `yaml`; plain fences only for file contents that have no highlighter (go.mod, templates)
+- configuration blocks are fenced as `terraform` (pandoc has no `hcl` highlighter); also `go`, `dockerfile`, `yaml`; plain fences only for file contents that have no highlighter (go.mod, templates); a block the reader is not meant to copy is fenced `{.terraform .nocopy}`, which keeps the highlighting and suppresses the site copy button
 - terminal sessions are `session` fences: every typed line starts with `$ ` and the tool's output follows on the next lines with no blank line between; `session.lua` renders the block as an outlined shaded tcolorbox with the `$` lines in bold. never use `bash` fences or a bare output block for something that was run
 - a line holding only `...` inside a session stands for output that was left out (say so once in ch00); tool output is trimmed to the interesting lines; ids and timings may differ from a real run but the wording must match the current tool
 - callouts are `::: {.tip}` divs whose body starts with `**Tip:**`, `**Trap:**`, or `**Wut:**`; a blank line must precede the opening fence; put `\index{}` lines inside the callout after the fence, never on the line before it
@@ -54,7 +55,7 @@ the booklet is its own repo opentofu, organized like ../go: the book lives in `t
 
 - 60 prefixes (`tasting/examples/motd/prefix.txt`) x 60 suffixes (`tasting/examples/motd/suffix.txt`), one per line; `tasting/examples/motd/main.tf` is a data-only module with outputs `prefixes`, `suffixes`, `sayings`, and `sql`; `setproduct` gives saying `n` = prefix `n / 60` + suffix `n % 60`, keyed by `minute * 60 + second` of local time
 - every saying is third person singular present tense so any prefix fits any suffix; no apostrophes or quotes, the template escapes them anyway
-- chapters 3, 4, and 5 pull the module from `github.com/BooksByGorgo/opentofu//tasting/examples/motd?ref=main`, so a change to `tasting/examples/motd` must be pushed before the examples (and `tofu init` in them) see it; `database/sayings.sql.tftpl` is chapter 3's own copy of the template and must stay identical to `motd/sayings.sql.tftpl`
+- chapters 3, 4, and 5 pull the module from `github.com/BooksByGorgo/opentofu//tasting/examples/motd?ref=main`, so a change to `tasting/examples/motd` must be pushed before the examples (and `tofu init` in them) see it; all three read the module's `sql` output rather than rendering the template themselves, so `motd/sayings.sql.tftpl` is the only copy
 
 # citations
 

@@ -1,9 +1,0 @@
-CREATE TABLE sayings (
-  id     INT PRIMARY KEY,
-  saying VARCHAR(255) NOT NULL
-);
-
-INSERT INTO sayings (id, saying) VALUES
-%{ for i, s in sayings ~}
-  (${i}, '${replace(s, "'", "''")}')${i < length(sayings) - 1 ? "," : ";"}
-%{ endfor ~}
